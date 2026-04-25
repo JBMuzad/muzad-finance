@@ -387,6 +387,35 @@ export default function App() {
     setCatFilter(null); setZoekterm(""); setRekeningFilter(null);
   }
 
+  function exportBackup() {
+    const data = { transactions, catOverrides, learnedRules, customCategories, savingsGoal, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `muzad-finance-backup-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importBackup(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (!data.transactions && !data.catOverrides) { alert("Ongeldig backupbestand."); return; }
+        if (!confirm(`Backup van ${data.exportedAt?.slice(0,10) || "onbekende datum"} herstellen?\nDit overschrijft je huidige data.`)) return;
+        setTransactions(data.transactions || []);
+        setCatOverrides(data.catOverrides || {});
+        setLearnedRules(data.learnedRules || { merchant: {}, iban: {} });
+        setCustomCategories(data.customCategories || {});
+        setSavingsGoal(data.savingsGoal || 500);
+        setView("overzicht");
+      } catch { alert("Kon het bestand niet lezen."); }
+    };
+    reader.readAsText(file);
+  }
+
   const noData = transactions.length === 0;
   const TABS = [
     { key: "overzicht",    label: "Overzicht" },
@@ -409,6 +438,7 @@ export default function App() {
           </div>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
             {!noData && <span style={{ fontSize: 11, color: "#7AAAB4" }}>{allTx.length} transacties · {maanden.length} maanden · 💾 {Math.round(lsSize()/1024)}KB bewaard</span>}
+            {!noData && <button onClick={exportBackup} style={{ padding: "5px 10px", background: "rgba(201,146,42,.25)", border: "1px solid rgba(201,146,42,.5)", borderRadius: 8, color: C.gold2, fontSize: 11, cursor: "pointer" }}>↓ Backup</button>}
             {!noData && <button onClick={resetData} style={{ padding: "5px 10px", background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.2)", borderRadius: 8, color: "#fff", fontSize: 11, cursor: "pointer" }}>✕ Reset</button>}
           </div>
         </div>
@@ -480,7 +510,8 @@ export default function App() {
             onClearLearned={() => setLearnedRules({ merchant: {}, iban: {} })}
             customCategories={customCategories}
             onAddCategory={addCustomCategory} onDeleteCategory={deleteCustomCategory}
-            onUploadMore={handleFiles} noData={noData} />
+            onUploadMore={handleFiles} noData={noData}
+            onExportBackup={exportBackup} onImportBackup={importBackup} />
         )}
 
       </main>
@@ -919,7 +950,8 @@ function ViewSparen({ gemInkomen, gemUitgaven, gemSaldo, savingsGoal, setSavings
 // VIEW: INSTELLINGEN
 // ══════════════════════════════════════════════════════════════════════════
 function ViewInstellingen({ learnedRules, allCategories, onDeleteMerchant, onDeleteIban, onClearLearned,
-  customCategories, onAddCategory, onDeleteCategory, onUploadMore, noData }) {
+  customCategories, onAddCategory, onDeleteCategory, onUploadMore, noData,
+  onExportBackup, onImportBackup }) {
 
   const [newLabel,  setNewLabel]  = useState("");
   const [newIcon,   setNewIcon]   = useState("📌");
@@ -941,6 +973,27 @@ function ViewInstellingen({ learnedRules, allCategories, onDeleteMerchant, onDel
   const sectionSub   = { fontSize: 12, color: C.muted, marginBottom: 16 };
 
   return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+    {/* Backup & herstel */}
+    <div style={{ background: "#FFFFFF", border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: C.teal, marginBottom: 4 }}>💾 Backup & herstel</div>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+        Download een backup van al je data (transacties, categorietoewijzingen, geleerde regels). Bewaar dit bestand lokaal als veiligheid.
+        Bij een nieuw toestel of na dataverlies kan je de backup hier herstellen.
+      </div>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <button onClick={onExportBackup}
+          style={{ padding: "10px 20px", background: C.teal, color: "#fff", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          ↓ Download backup (.json)
+        </button>
+        <label style={{ padding: "10px 20px", background: "#f0fdf4", color: "#15803d", border: "1px solid #86efac", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <input type="file" accept=".json" style={{ display: "none" }} onChange={e => e.target.files[0] && onImportBackup(e.target.files[0])} />
+          ↑ Herstel backup
+        </label>
+      </div>
+    </div>
+
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
 
       {/* ── Geleerde regels ── */}
@@ -1097,6 +1150,8 @@ function ViewInstellingen({ learnedRules, allCategories, onDeleteMerchant, onDel
           </div>
         </div>
       </div>
+    </div>
+
     </div>
   );
 }
