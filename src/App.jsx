@@ -22,12 +22,33 @@ const maandLabel = m => {
 function pct(part, total) { return total === 0 ? 0 : Math.round((part / total) * 100); }
 
 // ── Persistence ───────────────────────────────────────────────────────────
-const LS_KEY = "muzad_finance_v2";
+// details-veld is ~300 tekens per tx en niet meer nodig na verwerking → strippen
+const LS_KEY = "muzad_finance_v3";
+
 function loadState() {
   try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; }
 }
+
+function lsSize() {
+  try { return new Blob([localStorage.getItem(LS_KEY) || ""]).size; } catch { return 0; }
+}
+
 function saveState(s) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch {}
+  try {
+    // Strip details-veld: merchant is al geëxtraheerd, details niet meer nodig
+    const lean = {
+      ...s,
+      transactions: (s.transactions || []).map(({ details, ...rest }) => rest),
+    };
+    localStorage.setItem(LS_KEY, JSON.stringify(lean));
+  } catch {
+    // Fallback: sla alles op behalve transacties (instellingen + regels bewaren)
+    try {
+      const { transactions, ...rest } = s;
+      localStorage.setItem(LS_KEY, JSON.stringify(rest));
+      console.warn("Muzad Finance: transacties te groot voor localStorage, enkel instellingen bewaard.");
+    } catch {}
+  }
 }
 
 // ── MiniBar ───────────────────────────────────────────────────────────────
@@ -272,7 +293,7 @@ export default function App() {
       (!maandFilter || t.maand === maandFilter) &&
       (!catFilter || t.categorie === catFilter) &&
       (!rekeningFilter || t.rekening === rekeningFilter) &&
-      (!needle || `${t.merchant} ${t.tegenpartijNaam} ${t.mededeling} ${t.details}`.toLowerCase().includes(needle))
+      (!needle || `${t.merchant} ${t.tegenpartijNaam} ${t.mededeling}`.toLowerCase().includes(needle))
     );
   }, [allTx, maandFilter, catFilter, rekeningFilter, zoekterm]);
 
@@ -354,7 +375,7 @@ export default function App() {
             <div style={{ fontSize: 11, color: C.gold2 }}>Family Buytaert — privé financieel overzicht</div>
           </div>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-            {!noData && <span style={{ fontSize: 11, color: "#7AAAB4" }}>{allTx.length} transacties · {maanden.length} maanden</span>}
+            {!noData && <span style={{ fontSize: 11, color: "#7AAAB4" }}>{allTx.length} transacties · {maanden.length} maanden · 💾 {Math.round(lsSize()/1024)}KB bewaard</span>}
             {!noData && <button onClick={resetData} style={{ padding: "5px 10px", background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.2)", borderRadius: 8, color: "#fff", fontSize: 11, cursor: "pointer" }}>✕ Reset</button>}
           </div>
         </div>
