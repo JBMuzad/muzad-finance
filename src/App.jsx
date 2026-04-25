@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { parseCSV } from "./parseCSV.js";
 import { CATEGORIES, DEFAULT_FAMILY_ACCOUNTS, processTxList, detectAccounts } from "./categorize.js";
+import { dbLoadTransactions, dbUpsertTransactions, dbUpdateCategorie, dbLoadAllSettings, dbSaveSetting } from "./db.js";
 
 // ── Muzad kleurpalet ──────────────────────────────────────────────────────
 const C = {
@@ -200,13 +201,12 @@ function UploadZone({ onFiles, compact = false }) {
 // HOOFD APP
 // ══════════════════════════════════════════════════════════════════════════
 export default function App() {
-  const stored = loadState();
-
-  const [transactions,      setTransactions]      = useState(stored.transactions || []);
-  const [catOverrides,      setCatOverrides]       = useState(stored.catOverrides || {});
-  const [learnedRules,      setLearnedRules]       = useState(stored.learnedRules || { merchant: {}, iban: {} });
-  const [customCategories,  setCustomCategories]   = useState(stored.customCategories || {});
-  const [savingsGoal,       setSavingsGoal]        = useState(stored.savingsGoal || 500);
+  const [loading,           setLoading]            = useState(true);
+  const [transactions,      setTransactions]        = useState([]);
+  const [catOverrides,      setCatOverrides]        = useState({});
+  const [learnedRules,      setLearnedRules]        = useState({ merchant: {}, iban: {} });
+  const [customCategories,  setCustomCategories]    = useState({});
+  const [savingsGoal,       setSavingsGoal]         = useState(500);
   const [view,              setView]               = useState("overzicht");
   const [maandFilter,       setMaandFilter]        = useState(null);
   const [catFilter,         setCatFilter]          = useState(null);
@@ -215,10 +215,60 @@ export default function App() {
   const [editCat,           setEditCat]            = useState(null);
   const [reducSliders,      setReducSliders]       = useState({});
 
-  // Persist
+  // ── Laden uit Supabase bij opstart ───────────────────────────────────
   useEffect(() => {
-    saveState({ transactions, catOverrides, learnedRules, customCategories, savingsGoal });
-  }, [transactions, catOverrides, learnedRules, customCategories, savingsGoal]);
+    async function init() {
+      try {
+        const [txRows, settings] = await Promise.all([
+          dbLoadTransactions(),
+          dbLoadAllSettings(),
+        ]);
+        setTransactions(txRows.map(r => ({
+          id: r.id, volgnummer: r.volgnummer, datum: r.datum, maand: r.maand,
+          bedrag: r.bedrag, rekening: r.rekening, type: r.type,
+          tegenpartij: r.tegenpartij, tegenpartijNaam: r.tegenpartij_naam,
+          mededeling: r.mededeling, categorie: r.categorie, merchant: r.merchant,
+        })));
+        if (settings.catOverrides)        setCatOverrides(settings.catOverrides);
+        if (settings.learnedRules)        setLearnedRules(settings.learnedRules);
+        if (settings.customCategories)    setCustomCategories(settings.customCategories);
+        if (settings.savingsGoal != null) setSavingsGoal(settings.savingsGoal);
+      } catch (err) {
+        console.error("Supabase laden mislukt, val terug op localStorage:", err);
+        const stored = loadState();
+        setTransactions(stored.transactions || []);
+        setCatOverrides(stored.catOverrides || {});
+        setLearnedRules(stored.learnedRules || { merchant: {}, iban: {} });
+        setCustomCategories(stored.customCategories || {});
+        setSavingsGoal(stored.savingsGoal || 500);
+      } finally {
+        setLoading(false);
+      }
+    }
+    init();
+  }, []);
+
+  // ── Instellingen opslaan naar Supabase (debounced 1.5s) ─────────────
+  const saveTimerRef = useRef(null);
+  useEffect(() => {
+    if (loading) return;
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      Promise.all([
+        dbSaveSetting("catOverrides",     catOverrides),
+        dbSaveSetting("learnedRules",     learnedRules),
+        dbSaveSetting("customCategories", customCategories),
+        dbSaveSetting("savingsGoal",      savingsGoal),
+      ]).catch(err => console.error("Instellingen opslaan mislukt:", err));
+    }, 1500);
+  }, [catOverrides, learnedRules, customCategories, savingsGoal, loading]);
+
+  // ── localStorage als snelle lokale backup ───────────────────────────
+  useEffect(() => {
+    if (!loading) {
+      saveState({ transactions, catOverrides, learnedRules, customCategories, savingsGoal });
+    }
+  }, [transactions, catOverrides, learnedRules, customCategories, savingsGoal, loading]);
 
   // ── Alle categorieën (standaard + eigen) ────────────────────────────
   const allCategories = useMemo(() => ({ ...CATEGORIES, ...customCategories }), [customCategories]);
@@ -237,7 +287,12 @@ export default function App() {
     setTransactions(prev => {
       const existing = new Set(prev.map(t => t.id));
       const toAdd = newTxs.filter(t => !existing.has(t.id));
-      return processTxList([...prev, ...toAdd], familyIBANs);
+      if (!toAdd.length) return prev;
+      const merged = processTxList([...prev, ...toAdd], familyIBANs);
+      // Sla alleen de nieuwe transacties op in Supabase (ignoreDuplicates beschermt bestaande)
+      const newProcessed = merged.filter(t => !existing.has(t.id));
+      dbUpsertTransactions(newProcessed).catch(err => console.error("Transacties opslaan mislukt:", err));
+      return merged;
     });
     setView("overzicht");
   }, [familyIBANs]);
@@ -272,6 +327,17 @@ export default function App() {
       }
       return t;
     }));
+
+    // 4. Sla categorie op in Supabase voor alle overeenkomende transacties
+    const matchIds = [tx.id, ...transactions
+      .filter(t => t.id !== tx.id && (
+        (tx.tegenpartij && t.tegenpartij === tx.tegenpartij) ||
+        (tx.merchant && tx.merchant !== "Onbekend" &&
+          t.merchant?.toLowerCase() === tx.merchant.toLowerCase())
+      ))
+      .map(t => t.id),
+    ];
+    dbUpdateCategorie(matchIds, newCat).catch(err => console.error("Categorie opslaan mislukt:", err));
 
     setEditCat(null);
   }
@@ -424,6 +490,18 @@ export default function App() {
     { key: "sparen",       label: "Spaar Simulator" },
     { key: "instellingen", label: `Instellingen${learnedCount > 0 ? ` (${learnedCount})` : ""}` },
   ];
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Segoe UI', system-ui, sans-serif", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 52 }}>💳</div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: C.teal, marginTop: 14 }}>Muzad Finance</div>
+          <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>Verbinding maken met database…</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
