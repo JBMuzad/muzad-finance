@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { parseCSV } from "./parseCSV.js";
 import { CATEGORIES, DEFAULT_FAMILY_ACCOUNTS, processTxList, detectAccounts } from "./categorize.js";
 import { dbLoadTransactions, dbUpsertTransactions, dbUpdateCategorie, dbLoadAllSettings, dbSaveSetting } from "./db.js";
+import ViewPersonen from "./ViewPersonen.jsx";
 
 // ── Muzad kleurpalet ──────────────────────────────────────────────────────
 const C = {
@@ -488,6 +489,7 @@ export default function App() {
     { key: "transacties",  label: "Transacties" },
     { key: "categorieen",  label: "Categorieën" },
     { key: "analyse",      label: "Analyse" },
+    { key: "personen",     label: "Personen" },
     { key: "sparen",       label: "Spaar Simulator" },
     { key: "instellingen", label: `Instellingen${learnedCount > 0 ? ` (${learnedCount})` : ""}` },
   ];
@@ -579,6 +581,10 @@ export default function App() {
           <ViewAnalyse allTx={allTx} maanden={maanden}
             maandFilter={maandFilter} setMaandFilter={setMaandFilter}
             allCategories={allCategories} aantalMaanden={aantalMaanden} />
+        )}
+
+        {!noData && view === "personen" && (
+          <ViewPersonen allTx={allTx} maanden={maanden} allCategories={allCategories} />
         )}
 
         {!noData && view === "sparen" && (
