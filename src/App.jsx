@@ -167,6 +167,71 @@ function CatBadge({ cat, allCats }) {
   );
 }
 
+// ── FilterBar ─────────────────────────────────────────────────────────────
+function FilterBar({ maanden, filterVan, filterTot, setFilterVan, setFilterTot }) {
+  const isFiltered = filterVan || filterTot;
+
+  function clearFilter() { setFilterVan(null); setFilterTot(null); }
+
+  function setPreset(nMnd) {
+    if (nMnd === null) { clearFilter(); return; }
+    const d = new Date();
+    d.setMonth(d.getMonth() - nMnd + 1);
+    const van = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    setFilterVan(van);
+    setFilterTot(null);
+  }
+
+  function setThisYear() {
+    setFilterVan(`${new Date().getFullYear()}-01`);
+    setFilterTot(null);
+  }
+
+  function setLastYear() {
+    const y = new Date().getFullYear() - 1;
+    setFilterVan(`${y}-01`);
+    setFilterTot(`${y}-12`);
+  }
+
+  const sw = { padding: "5px 8px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, background: C.card, color: C.text, fontFamily: "inherit", cursor: "pointer" };
+
+  function PresetBtn({ label, onClick }) {
+    return (
+      <button onClick={onClick} style={{ ...sw, color: C.muted, padding: "5px 10px" }}>{label}</button>
+    );
+  }
+
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 16px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginRight: 2, whiteSpace: "nowrap" }}>Periode:</span>
+      <button onClick={() => clearFilter()} style={{ ...sw, ...((!isFiltered) ? { background: C.teal, color: "#fff", border: `1px solid ${C.teal}`, fontWeight: 600 } : {}) }}>Alles</button>
+      <PresetBtn label="3 mnd" onClick={() => setPreset(3)} />
+      <PresetBtn label="6 mnd" onClick={() => setPreset(6)} />
+      <PresetBtn label="Dit jaar" onClick={setThisYear} />
+      <PresetBtn label="Vorig jaar" onClick={setLastYear} />
+      <div style={{ width: 1, height: 20, background: C.border, margin: "0 4px", flexShrink: 0 }} />
+      <span style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap" }}>Van:</span>
+      <select value={filterVan || ""} onChange={e => setFilterVan(e.target.value || null)} style={sw}>
+        <option value="">Begin</option>
+        {maanden.map(m => <option key={m} value={m}>{m}</option>)}
+      </select>
+      <span style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap" }}>Tot:</span>
+      <select value={filterTot || ""} onChange={e => setFilterTot(e.target.value || null)} style={sw}>
+        <option value="">Heden</option>
+        {[...maanden].reverse().map(m => <option key={m} value={m}>{m}</option>)}
+      </select>
+      {isFiltered && (
+        <>
+          <button onClick={clearFilter} style={{ ...sw, background: "#fee2e2", color: "#b91c1c", border: "none", fontWeight: 600 }}>✕ Wis</button>
+          <span style={{ marginLeft: "auto", fontSize: 11, color: C.teal, fontWeight: 600, whiteSpace: "nowrap" }}>
+            {filterVan || "begin"} → {filterTot || "nu"}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── UploadZone ────────────────────────────────────────────────────────────
 function UploadZone({ onFiles, compact = false }) {
   const [over, setOver] = useState(false);
@@ -209,7 +274,8 @@ export default function App() {
   const [customCategories,  setCustomCategories]    = useState({});
   const [savingsGoal,       setSavingsGoal]         = useState(500);
   const [view,              setView]               = useState("overzicht");
-  const [maandFilter,       setMaandFilter]        = useState(null);
+  const [filterVan,         setFilterVan]          = useState(null);
+  const [filterTot,         setFilterTot]          = useState(null);
   const [catFilter,         setCatFilter]          = useState(null);
   const [rekeningFilter,    setRekeningFilter]     = useState(null);
   const [zoekterm,          setZoekterm]           = useState("");
@@ -386,19 +452,26 @@ export default function App() {
   const accounts = useMemo(() => detectAccounts(allTx), [allTx]);
   const maanden  = useMemo(() => [...new Set(allTx.map(t => t.maand))].sort(), [allTx]);
 
+  // ── Periodefilter helper ──────────────────────────────────────────────
+  const inPeriode = useCallback((m) =>
+    (!filterVan || m >= filterVan) && (!filterTot || m <= filterTot),
+    [filterVan, filterTot]);
+
   // ── Gefilterde transacties ─────────────────────────────────────────────
   const filtered = useMemo(() => {
     const needle = zoekterm.toLowerCase();
     return allTx.filter(t =>
-      (!maandFilter || t.maand === maandFilter) &&
+      inPeriode(t.maand) &&
       (!catFilter || t.categorie === catFilter) &&
       (!rekeningFilter || t.rekening === rekeningFilter) &&
       (!needle || `${t.merchant} ${t.tegenpartijNaam} ${t.mededeling}`.toLowerCase().includes(needle))
     );
-  }, [allTx, maandFilter, catFilter, rekeningFilter, zoekterm]);
+  }, [allTx, inPeriode, catFilter, rekeningFilter, zoekterm]);
 
-  // ── Externe transacties (excl. intern) ───────────────────────────────
-  const externe = useMemo(() => allTx.filter(t => t.categorie !== "familie"), [allTx]);
+  // ── Externe transacties (excl. intern, periode-gefilterd) ─────────────
+  const externe = useMemo(() =>
+    allTx.filter(t => t.categorie !== "familie" && inPeriode(t.maand)),
+    [allTx, inPeriode]);
 
   // ── Stats per maand ────────────────────────────────────────────────────
   const maandStats = useMemo(() => {
@@ -420,8 +493,7 @@ export default function App() {
   // ── Stats per categorie ────────────────────────────────────────────────
   const catStats = useMemo(() => {
     const map = {};
-    const basis = maandFilter ? filtered : externe;
-    basis.filter(t => t.bedrag < 0 && t.categorie !== "familie").forEach(t => {
+    externe.filter(t => t.bedrag < 0 && t.categorie !== "familie").forEach(t => {
       if (!map[t.categorie]) map[t.categorie] = { cat: t.categorie, totaal: 0, count: 0, merchants: {} };
       map[t.categorie].totaal += Math.abs(t.bedrag);
       map[t.categorie].count++;
@@ -429,7 +501,7 @@ export default function App() {
       map[t.categorie].merchants[m] = (map[t.categorie].merchants[m] || 0) + Math.abs(t.bedrag);
     });
     return Object.values(map).sort((a, b) => b.totaal - a.totaal);
-  }, [externe, filtered, maandFilter]);
+  }, [externe]);
 
   const totalUitgaven = catStats.reduce((s, c) => s + c.totaal, 0);
 
@@ -450,7 +522,7 @@ export default function App() {
 
   function resetData() {
     if (!confirm("Alle transacties verwijderen?")) return;
-    setTransactions([]); setCatOverrides({}); setMaandFilter(null);
+    setTransactions([]); setCatOverrides({}); setFilterVan(null); setFilterTot(null);
     setCatFilter(null); setZoekterm(""); setRekeningFilter(null);
   }
 
@@ -552,17 +624,25 @@ export default function App() {
           </div>
         )}
 
+        {/* Globale periodefilter — zichtbaar op alle tabs behalve instellingen */}
+        {!noData && view !== "instellingen" && maanden.length > 1 && (
+          <div style={{ marginBottom: 16 }}>
+            <FilterBar maanden={maanden} filterVan={filterVan} filterTot={filterTot}
+              setFilterVan={setFilterVan} setFilterTot={setFilterTot} />
+          </div>
+        )}
+
         {!noData && view === "overzicht" && (
           <ViewOverzicht gemInkomen={gemInkomen} gemUitgaven={gemUitgaven} gemSaldo={gemSaldo}
             maandenPos={maandenPos} aantalMaanden={aantalMaanden} maandStats={maandStats}
             catStats={catStats} totalUitgaven={totalUitgaven} accounts={accounts} allTx={allTx}
-            maandFilter={maandFilter} setMaandFilter={setMaandFilter}
+            filterVan={filterVan} filterTot={filterTot}
+            setFilterVan={setFilterVan} setFilterTot={setFilterTot}
             allCategories={allCategories} onUploadMore={handleFiles} />
         )}
 
         {!noData && view === "transacties" && (
-          <ViewTransacties filtered={filtered} maanden={maanden} accounts={accounts}
-            maandFilter={maandFilter} setMaandFilter={setMaandFilter}
+          <ViewTransacties filtered={filtered} accounts={accounts}
             catFilter={catFilter} setCatFilter={setCatFilter}
             rekeningFilter={rekeningFilter} setRekeningFilter={setRekeningFilter}
             zoekterm={zoekterm} setZoekterm={setZoekterm}
@@ -572,19 +652,18 @@ export default function App() {
 
         {!noData && view === "categorieen" && (
           <ViewCategorien catStats={catStats} totalUitgaven={totalUitgaven}
-            aantalMaanden={aantalMaanden} maandFilter={maandFilter} setMaandFilter={setMaandFilter}
-            maanden={maanden} catFilter={catFilter} setCatFilter={setCatFilter}
-            setView={setView} allCategories={allCategories} />
+            aantalMaanden={aantalMaanden}
+            catFilter={catFilter} setCatFilter={setCatFilter}
+            setView={setView} allCategories={allCategories} filterVan={filterVan} filterTot={filterTot} />
         )}
 
         {!noData && view === "analyse" && (
-          <ViewAnalyse allTx={allTx} maanden={maanden}
-            maandFilter={maandFilter} setMaandFilter={setMaandFilter}
-            allCategories={allCategories} aantalMaanden={aantalMaanden} />
+          <ViewAnalyse allTx={allTx} maanden={maanden} allCategories={allCategories} />
         )}
 
         {!noData && view === "personen" && (
-          <ViewPersonen allTx={allTx} maanden={maanden} allCategories={allCategories} />
+          <ViewPersonen allTx={allTx} maanden={maanden} allCategories={allCategories}
+            filterVan={filterVan} filterTot={filterTot} />
         )}
 
         {!noData && view === "sparen" && (
@@ -614,13 +693,21 @@ export default function App() {
 // VIEW: OVERZICHT
 // ══════════════════════════════════════════════════════════════════════════
 function ViewOverzicht({ gemInkomen, gemUitgaven, gemSaldo, maandenPos, aantalMaanden,
-  maandStats, catStats, totalUitgaven, accounts, allTx, maandFilter, setMaandFilter,
+  maandStats, catStats, totalUitgaven, accounts, allTx,
+  filterVan, filterTot, setFilterVan, setFilterTot,
   allCategories, onUploadMore }) {
 
-  const maxCat    = catStats[0]?.totaal || 1;
-  const top5      = catStats.slice(0, 6);
-  const recentTx  = [...allTx].sort((a, b) => b.datum.localeCompare(a.datum)).slice(0, 8);
+  const maxCat     = catStats[0]?.totaal || 1;
+  const top5       = catStats.slice(0, 6);
+  const recentTx   = [...allTx].sort((a, b) => b.datum.localeCompare(a.datum)).slice(0, 8);
   const saldoColor = gemSaldo >= 0 ? "#0a7c5c" : "#C62828";
+
+  // Klik op maand in grafiek → stel periodefilter in op die ene maand
+  const selectedMaand = (filterVan && filterVan === filterTot) ? filterVan : null;
+  function handleSelectMaand(m) {
+    if (m === null || selectedMaand === m) { setFilterVan(null); setFilterTot(null); }
+    else { setFilterVan(m); setFilterTot(m); }
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -644,12 +731,12 @@ function ViewOverzicht({ gemInkomen, gemUitgaven, gemSaldo, maandenPos, aantalMa
             </div>
           </div>
           {maandStats.length > 0
-            ? <MaandGrafiek maanden={maandStats} selected={maandFilter} onSelect={setMaandFilter} />
+            ? <MaandGrafiek maanden={maandStats} selected={selectedMaand} onSelect={handleSelectMaand} />
             : <div style={{ color: C.muted, fontSize: 12, textAlign: "center", padding: 40 }}>Nog geen data</div>}
-          {maandFilter && (
+          {selectedMaand && (
             <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-              <span style={{ fontSize: 12, color: C.teal, fontWeight: 600 }}>Gefilterd: {maandFilter}</span>
-              <button onClick={() => setMaandFilter(null)} style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", background: "#fff", color: C.muted }}>✕ Wis</button>
+              <span style={{ fontSize: 12, color: C.teal, fontWeight: 600 }}>Gefilterd: {selectedMaand}</span>
+              <button onClick={() => { setFilterVan(null); setFilterTot(null); }} style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", background: "#fff", color: C.muted }}>✕ Wis</button>
             </div>
           )}
         </div>
@@ -719,7 +806,7 @@ function ViewOverzicht({ gemInkomen, gemUitgaven, gemSaldo, maandenPos, aantalMa
 // ══════════════════════════════════════════════════════════════════════════
 // VIEW: TRANSACTIES
 // ══════════════════════════════════════════════════════════════════════════
-function ViewTransacties({ filtered, maanden, accounts, maandFilter, setMaandFilter,
+function ViewTransacties({ filtered, accounts,
   catFilter, setCatFilter, rekeningFilter, setRekeningFilter, zoekterm, setZoekterm,
   editCat, setEditCat, allCategories, onCategoryChange }) {
 
@@ -740,10 +827,6 @@ function ViewTransacties({ filtered, maanden, accounts, maandFilter, setMaandFil
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <input value={zoekterm} onChange={e => { setZoekterm(e.target.value); setPage(0); }}
             placeholder="🔍 Zoek op merchant, beschrijving..." style={{ ...sw, flex: "1 1 200px" }} />
-          <select value={maandFilter || ""} onChange={e => { setMaandFilter(e.target.value || null); setPage(0); }} style={sw}>
-            <option value="">Alle maanden</option>
-            {maanden.map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
           <select value={catFilter || ""} onChange={e => { setCatFilter(e.target.value || null); setPage(0); }} style={sw}>
             <option value="">Alle categorieën</option>
             {Object.entries(allCategories).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
@@ -752,10 +835,10 @@ function ViewTransacties({ filtered, maanden, accounts, maandFilter, setMaandFil
             <option value="">Alle rekeningen</option>
             {Object.entries(accounts).map(([iban, acc]) => <option key={iban} value={iban}>{acc.label}</option>)}
           </select>
-          {(zoekterm || maandFilter || catFilter || rekeningFilter) && (
-            <button onClick={() => { setZoekterm(""); setMaandFilter(null); setCatFilter(null); setRekeningFilter(null); setPage(0); }}
+          {(zoekterm || catFilter || rekeningFilter) && (
+            <button onClick={() => { setZoekterm(""); setCatFilter(null); setRekeningFilter(null); setPage(0); }}
               style={{ padding: "7px 12px", background: "#fee2e2", color: "#b91c1c", border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>
-              ✕ Wis alles
+              ✕ Wis filters
             </button>
           )}
           <span style={{ fontSize: 11, color: C.muted, marginLeft: "auto" }}>{filtered.length} resultaten</span>
@@ -838,24 +921,21 @@ function ViewTransacties({ filtered, maanden, accounts, maandFilter, setMaandFil
 // ══════════════════════════════════════════════════════════════════════════
 // VIEW: CATEGORIEËN
 // ══════════════════════════════════════════════════════════════════════════
-function ViewCategorien({ catStats, totalUitgaven, aantalMaanden, maandFilter, setMaandFilter,
-  maanden, catFilter, setCatFilter, setView, allCategories }) {
+function ViewCategorien({ catStats, totalUitgaven, aantalMaanden,
+  catFilter, setCatFilter, setView, allCategories, filterVan, filterTot }) {
 
   const [expanded, setExpanded] = useState(null);
   const donutSeg = catStats.slice(0, 8).map(c => ({ value: c.totaal, color: (allCategories[c.cat] || CATEGORIES.overige).color }));
-
-  const sw = { padding: "7px 10px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, background: C.card, fontFamily: "inherit" };
+  const isFiltered = filterVan || filterTot;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 16px", display: "flex", gap: 10, alignItems: "center" }}>
-        <select value={maandFilter || ""} onChange={e => setMaandFilter(e.target.value || null)} style={sw}>
-          <option value="">Alle maanden (gemiddeld/maand)</option>
-          {maanden.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-        {maandFilter && <button onClick={() => setMaandFilter(null)} style={{ padding: "5px 10px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, cursor: "pointer" }}>✕ Alle periodes</button>}
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.teal }}>
+          {isFiltered ? `Periode: ${filterVan || "begin"} → ${filterTot || "nu"}` : `Alle periodes · ${aantalMaanden} maanden`}
+        </span>
         <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>
-          {maandFilter ? `Totaal: ${fmt(totalUitgaven)}` : `Gem.: ${fmt(totalUitgaven / aantalMaanden)}/mnd`}
+          {isFiltered && aantalMaanden === 1 ? `Totaal: ${fmt(totalUitgaven)}` : `Gem.: ${fmt(totalUitgaven / aantalMaanden)}/mnd · Totaal: ${fmt(totalUitgaven)}`}
         </span>
       </div>
 
@@ -894,7 +974,7 @@ function ViewCategorien({ catStats, totalUitgaven, aantalMaanden, maandFilter, s
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{cat.label}</span>
                       <span style={{ fontSize: 13, fontWeight: 700, color: cat.color }}>
-                        {maandFilter ? fmt(cs.totaal) : <>{fmt(avgMnd)}<span style={{ fontSize: 10, fontWeight: 400, color: C.muted }}>/mnd</span></>}
+                        {(isFiltered && aantalMaanden === 1) ? fmt(cs.totaal) : <>{fmt(avgMnd)}<span style={{ fontSize: 10, fontWeight: 400, color: C.muted }}>/mnd</span></>}
                       </span>
                     </div>
                     <MiniBar value={cs.totaal} max={catStats[0]?.totaal || 1} color={cat.color} />
@@ -1268,7 +1348,8 @@ const TIPS = {
   overige:      ["Categoriseer onbekende uitgaven om inzicht te krijgen — het systeem onthoudt het daarna.", "Bekijk terugkerende onbekende bedragen — dit zijn vaak kleine abonnementen die vergeten zijn."],
 };
 
-function ViewAnalyse({ allTx, maanden, maandFilter, setMaandFilter, allCategories, aantalMaanden }) {
+function ViewAnalyse({ allTx, maanden, allCategories }) {
+  const [refMaand, setRefMaand] = useState(null);
   const EXCL = new Set(["inkomen", "familie", "sparen", "muzad"]);
   const maandenLijst = [...maanden].sort();
 
@@ -1294,8 +1375,8 @@ function ViewAnalyse({ allTx, maanden, maandFilter, setMaandFilter, allCategorie
   }, [maandCatMap, nMaanden]);
 
   // Referentiemaand = gekozen of meest recente
-  const refMaand = maandFilter || maandenLijst[maandenLijst.length - 1];
-  const refData  = maandCatMap[refMaand] || {};
+  const activeMaand = refMaand || maandenLijst[maandenLijst.length - 1];
+  const refData  = maandCatMap[activeMaand] || {};
   const heeftRef = Object.keys(refData).length > 0;
 
   // Vergelijking per categorie
@@ -1323,7 +1404,7 @@ function ViewAnalyse({ allTx, maanden, maandFilter, setMaandFilter, allCategorie
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 20px", display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 5 }}>Analyseer maand</div>
-          <select value={maandFilter || ""} onChange={e => setMaandFilter(e.target.value || null)} style={sw}>
+          <select value={refMaand || ""} onChange={e => setRefMaand(e.target.value || null)} style={sw}>
             <option value="">Meest recente ({maandenLijst[maandenLijst.length - 1]})</option>
             {[...maandenLijst].reverse().map(m => <option key={m} value={m}>{m}</option>)}
           </select>
@@ -1350,7 +1431,7 @@ function ViewAnalyse({ allTx, maanden, maandFilter, setMaandFilter, allCategorie
       {/* Alarmen: hoog boven gemiddelde */}
       {heeftRef && alarmen.length > 0 && (
         <div style={{ background: C.card, border: "1px solid #fca5a5", borderRadius: 12, padding: 20 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#C62828", marginBottom: 4 }}>⚠️ Hoog verbruik in {refMaand}</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#C62828", marginBottom: 4 }}>⚠️ Hoog verbruik in {activeMaand}</div>
           <div style={{ fontSize: 12, color: C.muted, marginBottom: 18 }}>
             Deze categorieën liggen meer dan 25% boven hun historisch maandgemiddelde.
           </div>
@@ -1399,7 +1480,7 @@ function ViewAnalyse({ allTx, maanden, maandFilter, setMaandFilter, allCategorie
       {/* Positief nieuws */}
       {heeftRef && positief.length > 0 && (
         <div style={{ background: C.card, border: "1px solid #86efac", borderRadius: 12, padding: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#0a7c5c", marginBottom: 10 }}>✅ Goed bezig in {refMaand}</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#0a7c5c", marginBottom: 10 }}>✅ Goed bezig in {activeMaand}</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {positief.map(a => {
               const cat = allCategories[a.cat] || CATEGORIES.overige;
@@ -1423,7 +1504,7 @@ function ViewAnalyse({ allTx, maanden, maandFilter, setMaandFilter, allCategorie
       {/* Volledige vergelijking — alle categorieën */}
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: C.teal, marginBottom: 4 }}>
-          📊 Alle categorieën — {refMaand} vs historisch gemiddelde
+          📊 Alle categorieën — {activeMaand} vs historisch gemiddelde
         </div>
         <div style={{ display: "flex", gap: 16, fontSize: 11, color: C.muted, marginBottom: 20, flexWrap: "wrap" }}>
           <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#c5d5d8", borderRadius: 2, marginRight: 4 }} />Gemiddelde</span>

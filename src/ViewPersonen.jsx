@@ -141,10 +141,14 @@ function KindCard({ name, color, initials, ontvangenTotaal, eigenTotaal, eigenCa
   );
 }
 
-export default function ViewPersonen({ allTx, maanden, allCategories }) {
+export default function ViewPersonen({ allTx, maanden, allCategories, filterVan, filterTot }) {
   const EXCL     = new Set(["inkomen", "familie", "sparen"]);
-  const nMaanden = Math.max(maanden.length, 1);
   const alleM    = [...maanden].sort();
+
+  // Periodefilter: als actief, hanteer alleen maanden in de periode
+  const inPeriode = m => (!filterVan || m >= filterVan) && (!filterTot || m <= filterTot);
+  const filteredM  = alleM.filter(inPeriode);
+  const nMaanden   = Math.max(filteredM.length, 1);
 
   function catBreak(txList) {
     const map = {};
@@ -157,10 +161,10 @@ export default function ViewPersonen({ allTx, maanden, allCategories }) {
     return map;
   }
 
-  const janUitg    = useMemo(() => allTx.filter(t => JAN_IBANS.has(t.rekening)    && t.bedrag < 0 && !EXCL.has(t.categorie)), [allTx]);
-  const sandraUitg = useMemo(() => allTx.filter(t => SANDRA_IBANS.has(t.rekening) && t.bedrag < 0 && !EXCL.has(t.categorie)), [allTx]);
-  const janInk     = useMemo(() => allTx.filter(t => JAN_IBANS.has(t.rekening)    && t.categorie === "inkomen"), [allTx]);
-  const sandraInk  = useMemo(() => allTx.filter(t => SANDRA_IBANS.has(t.rekening) && t.categorie === "inkomen"), [allTx]);
+  const janUitg    = useMemo(() => allTx.filter(t => JAN_IBANS.has(t.rekening)    && t.bedrag < 0 && !EXCL.has(t.categorie) && inPeriode(t.maand)), [allTx, filterVan, filterTot]);
+  const sandraUitg = useMemo(() => allTx.filter(t => SANDRA_IBANS.has(t.rekening) && t.bedrag < 0 && !EXCL.has(t.categorie) && inPeriode(t.maand)), [allTx, filterVan, filterTot]);
+  const janInk     = useMemo(() => allTx.filter(t => JAN_IBANS.has(t.rekening)    && t.categorie === "inkomen" && inPeriode(t.maand)), [allTx, filterVan, filterTot]);
+  const sandraInk  = useMemo(() => allTx.filter(t => SANDRA_IBANS.has(t.rekening) && t.categorie === "inkomen" && inPeriode(t.maand)), [allTx, filterVan, filterTot]);
 
   const janCats     = useMemo(() => catBreak(janUitg),    [janUitg]);
   const sandraCats  = useMemo(() => catBreak(sandraUitg), [sandraUitg]);
@@ -172,12 +176,12 @@ export default function ViewPersonen({ allTx, maanden, allCategories }) {
   const janInkTotaal    = janInk.reduce((s, t) => s + t.bedrag, 0);
   const sandraInkTotaal = sandraInk.reduce((s, t) => s + t.bedrag, 0);
 
-  const lauraTx    = useMemo(() => allTx.filter(t => isLaura(t)), [allTx]);
+  const lauraTx    = useMemo(() => allTx.filter(t => isLaura(t) && inPeriode(t.maand)), [allTx, filterVan, filterTot]);
   const lauraTotaal= lauraTx.reduce((s, t) => s + Math.abs(t.bedrag), 0);
   const lauraMaand = useMemo(() => maandBreak(lauraTx), [lauraTx]);
 
-  const sofieOntvangen       = useMemo(() => allTx.filter(t => t.tegenpartij === SOFIE_IBAN && t.bedrag < 0 && (JAN_IBANS.has(t.rekening) || SANDRA_IBANS.has(t.rekening))), [allTx]);
-  const sofieEigenUitg       = useMemo(() => allTx.filter(t => t.rekening === SOFIE_IBAN && t.bedrag < 0 && !EXCL.has(t.categorie)), [allTx]);
+  const sofieOntvangen       = useMemo(() => allTx.filter(t => t.tegenpartij === SOFIE_IBAN && t.bedrag < 0 && (JAN_IBANS.has(t.rekening) || SANDRA_IBANS.has(t.rekening)) && inPeriode(t.maand)), [allTx, filterVan, filterTot]);
+  const sofieEigenUitg       = useMemo(() => allTx.filter(t => t.rekening === SOFIE_IBAN && t.bedrag < 0 && !EXCL.has(t.categorie) && inPeriode(t.maand)), [allTx, filterVan, filterTot]);
   const sofieCats            = useMemo(() => catBreak(sofieEigenUitg), [sofieEigenUitg]);
   const sofieOntvangenTotaal = sofieOntvangen.reduce((s, t) => s + Math.abs(t.bedrag), 0);
   const sofieEigenTotaal     = sofieEigenUitg.reduce((s, t) => s + Math.abs(t.bedrag), 0);
@@ -187,7 +191,7 @@ export default function ViewPersonen({ allTx, maanden, allCategories }) {
     return m;
   }, [sofieOntvangen, sofieEigenUitg]);
 
-  const maxMaandBedrag = Math.max(...alleM.map(m => Math.max(janMaand[m]||0, sandraMaand[m]||0)), 1);
+  const maxMaandBedrag = Math.max(...filteredM.map(m => Math.max(janMaand[m]||0, sandraMaand[m]||0)), 1);
 
   const allCats  = [...new Set([...janCats.map(([c]) => c), ...sandraCats.map(([c]) => c)])];
   const janCatMap    = Object.fromEntries(janCats);
@@ -246,7 +250,7 @@ export default function ViewPersonen({ allTx, maanden, allCategories }) {
       )}
 
       {/* Maandvergelijking grafiek */}
-      {alleM.length > 1 && (
+      {filteredM.length > 1 && (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: C.teal, marginBottom: 4 }}>📅 Verbruik per maand</div>
           <div style={{ display: "flex", gap: 16, fontSize: 11, color: C.muted, marginBottom: 16 }}>
@@ -254,7 +258,7 @@ export default function ViewPersonen({ allTx, maanden, allCategories }) {
             <span><span style={{ display: "inline-block", width: 10, height: 10, background: SANDRA_CLR, borderRadius: 2, marginRight: 4 }} />Sandra</span>
           </div>
           <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 140, overflowX: "auto" }}>
-            {alleM.slice(-24).map(m => {
+            {filteredM.slice(-24).map(m => {
               const j  = janMaand[m] || 0;
               const s  = sandraMaand[m] || 0;
               const jH = Math.round((j/maxMaandBedrag)*110);
@@ -279,10 +283,10 @@ export default function ViewPersonen({ allTx, maanden, allCategories }) {
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
           <KindCard name="Laura" initials="L" color={LAURA_CLR}
             ontvangenTotaal={lauraTotaal}          eigenTotaal={0}               eigenCats={[]}     maandMap={lauraMaand}
-            nMaanden={nMaanden} alleM={alleM} allCategories={allCategories} />
+            nMaanden={nMaanden} alleM={filteredM} allCategories={allCategories} />
           <KindCard name="Sofie" initials="S" color={SOFIE_CLR}
             ontvangenTotaal={sofieOntvangenTotaal} eigenTotaal={sofieEigenTotaal} eigenCats={sofieCats} maandMap={sofieMaand}
-            nMaanden={nMaanden} alleM={alleM} allCategories={allCategories} />
+            nMaanden={nMaanden} alleM={filteredM} allCategories={allCategories} />
         </div>
       </div>
 
