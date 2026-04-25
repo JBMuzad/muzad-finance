@@ -23,10 +23,31 @@ function pct(part, total) { return total === 0 ? 0 : Math.round((part / total) *
 
 // ── Persistence ───────────────────────────────────────────────────────────
 // details-veld is ~300 tekens per tx en niet meer nodig na verwerking → strippen
-const LS_KEY = "muzad_finance_v3";
+const LS_KEY     = "muzad_finance_v3";
+const LS_KEY_OLD = "muzad_finance_v2";
 
 function loadState() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; }
+  try {
+    // Probeer eerst v3 (huidig)
+    const v3 = localStorage.getItem(LS_KEY);
+    if (v3) return JSON.parse(v3) || {};
+
+    // Migreer van v2 als die nog bestaat
+    const v2raw = localStorage.getItem(LS_KEY_OLD);
+    if (v2raw) {
+      const v2 = JSON.parse(v2raw) || {};
+      // Strip details-veld uit eventuele v2-transacties
+      if (v2.transactions) {
+        v2.transactions = v2.transactions.map(({ details, ...rest }) => rest);
+      }
+      // Sla meteen op als v3 en verwijder v2
+      try { localStorage.setItem(LS_KEY, JSON.stringify(v2)); } catch {}
+      try { localStorage.removeItem(LS_KEY_OLD); } catch {}
+      return v2;
+    }
+
+    return {};
+  } catch { return {}; }
 }
 
 function lsSize() {
