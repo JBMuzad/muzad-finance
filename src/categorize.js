@@ -1,11 +1,17 @@
 // ── Bekende familierekeningen (Buytaert) ──────────────────────────────────
 export const DEFAULT_FAMILY_ACCOUNTS = {
-  "BE12290019028892": { label: "Jan – Zichtrekening",   kleur: "#0D4A52", eigenaar: "Jan" },
-  "BE34290019028690": { label: "Sandra – Zichtrekening",kleur: "#1A6B7C", eigenaar: "Sandra" },
-  "BE66290786264843": { label: "Sandra – Rekening 2",   kleur: "#2A8A9C", eigenaar: "Sandra" },
-  "BE08034404717913": { label: "Jan – Spaarrekening",   kleur: "#558B2F", eigenaar: "Jan" },
-  "BE95001677814858": { label: "Sofie",                 kleur: "#E65100", eigenaar: "Sofie" },
+  "BE12290019028892": { label: "Jan – Zichtrekening",    kleur: "#0D4A52", eigenaar: "Jan" },
+  "BE34290019028690": { label: "Sandra – Zichtrekening", kleur: "#1A6B7C", eigenaar: "Sandra" },
+  "BE66290786264843": { label: "Sandra – Spaarrekening", kleur: "#2A8A9C", eigenaar: "Sandra" },
+  "BE08034404717913": { label: "Jan – Spaarrekening",    kleur: "#558B2F", eigenaar: "Jan" },
+  "BE95001677814858": { label: "Sofie",                  kleur: "#E65100", eigenaar: "Sofie" },
 };
+
+// ── Spaarrekeningen: stortingen én opnames → altijd "sparen" ──────────────
+const SAVINGS_IBANS = new Set([
+  "BE66290786264843",  // Sandra – Spaarrekening
+  "BE08034404717913",  // Jan – Spaarrekening
+]);
 
 // ── Categorieën ───────────────────────────────────────────────────────────
 export const CATEGORIES = {
@@ -161,6 +167,8 @@ export function categorize(tx, familyIBANs) {
 
   // Intern familietransfer (beide kanten zijn familierekeningen)
   if (tegenInFamily && rekeningInFamily) {
+    // Als één kant een spaarrekening is → altijd sparen (storting én opname)
+    if (SAVINGS_IBANS.has(tx.tegenpartij) || SAVINGS_IBANS.has(tx.rekening)) return "sparen";
     if (haystack.includes("spaar")) return "sparen";
     return "familie";
   }
