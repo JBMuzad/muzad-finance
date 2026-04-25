@@ -487,6 +487,7 @@ export default function App() {
     { key: "overzicht",    label: "Overzicht" },
     { key: "transacties",  label: "Transacties" },
     { key: "categorieen",  label: "Categorieën" },
+    { key: "analyse",      label: "Analyse" },
     { key: "sparen",       label: "Spaar Simulator" },
     { key: "instellingen", label: `Instellingen${learnedCount > 0 ? ` (${learnedCount})` : ""}` },
   ];
@@ -572,6 +573,12 @@ export default function App() {
             aantalMaanden={aantalMaanden} maandFilter={maandFilter} setMaandFilter={setMaandFilter}
             maanden={maanden} catFilter={catFilter} setCatFilter={setCatFilter}
             setView={setView} allCategories={allCategories} />
+        )}
+
+        {!noData && view === "analyse" && (
+          <ViewAnalyse allTx={allTx} maanden={maanden}
+            maandFilter={maandFilter} setMaandFilter={setMaandFilter}
+            allCategories={allCategories} aantalMaanden={aantalMaanden} />
         )}
 
         {!noData && view === "sparen" && (
@@ -1229,6 +1236,260 @@ function ViewInstellingen({ learnedRules, allCategories, onDeleteMerchant, onDel
         </div>
       </div>
     </div>
+
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// VIEW: ANALYSE & INZICHTEN
+// ══════════════════════════════════════════════════════════════════════════
+const TIPS = {
+  hypotheek:    ["Herfinancier je hypotheek als de marktrente gedaald is — potentiële besparing honderden euro's/jaar.", "Extra aflossingen verminderen de rentelast op lange termijn.", "Vergelijk je huidige tarief met wat banken aanbieden aan nieuwe klanten."],
+  wonen:        ["Vergelijk energieleveranciers via de VREG-vergelijkingsmodule — bespaar tot €300/jaar.", "Verlaag je thermostaat met 1°C — dat spaart ~7% op verwarmingskosten.", "Isoleer je dak en ramen — overheidssteun via Mijn VerbouwPremie beschikbaar."],
+  voeding:      ["Kies vaker voor huismerken bij Colruyt of Lidl — tot 30% goedkoper dan merken.", "Plan maaltijden op voorhand en schrijf een lijstje — minder verspilling en impulsaankopen.", "Batch cooking op zondag spaart tijd én geld doordeweeks."],
+  vervoer:      ["Elektrisch rijden verlaagt brandstofkosten significant bij dagelijks gebruik.", "Combineer ritten en fiets voor trajecten onder 3 km.", "Vergelijk parkings op voorhand via Google Maps — grote prijsverschillen in steden."],
+  gezondheid:   ["Dien terugbetalingsdocumenten tijdig in bij je ziekenfonds — veel mensen missen dit.", "Generische geneesmiddelen zijn even effectief en tot 60% goedkoper.", "Preventieve zorg (tandarts, oogarts) is goedkoper dan curatief — plan regelmatige check-ups."],
+  shopping:     ["Wacht 48 uur voor een aankoop — filtert impulsaankopen eruit.", "Check Vinted of 2dehands voor kleding — zelfde kwaliteit, lagere prijs.", "Maak een wishlist en koop enkel tijdens sales of met kortingscodes."],
+  sport:        ["Vergelijk sportabonnementen — combineer activiteiten in één pakket.", "Boek evenementen vroeg — early bird prijzen zijn vaak 20-30% goedkoper.", "Zoek naar groepsabonnementen bij clubs voor vrienden of familie."],
+  restaurant:   ["Beperk restaurantbezoeken tot 2–3 keer per maand en maak er een bewuste keuze van.", "Kies lunch i.p.v. diner bij hetzelfde restaurant — gemiddeld 40% goedkoper.", "Kook eens samen met vrienden in plaats van uit eten — gezelliger én goedkoper."],
+  telecom:      ["Vergelijk bundelpakketten jaarlijks — telecommarkt verandert snel.", "Schakel over naar Mobile Vikings of Scarlet voor gsm — besparing tot €20/maand.", "Gebruik één provider voor internet + tv + gsm — bundels zijn goedkoper."],
+  abonnementen: ["Maak een lijst van alle actieve abonnementen — velen betalen voor dingen ze vergeten zijn.", "Deel streaming-abonnementen via gezinsplan — goedkoper dan meerdere individuele.", "Schakel over naar jaarlijkse betaling i.p.v. maandelijks — typisch 15–20% korting."],
+  financieel:   ["Vergelijk verzekeringspremies jaarlijks — trouwe klanten betalen soms meer dan nieuwelingen.", "Bundel verzekeringen bij één maatschappij — vaak korting bij meerdere polissen.", "Controleer of je DKV-polis nog overeenkomt met je huidige situatie."],
+  huisdieren:   ["Dierenverzekering dekt onverwachte dierenartsfacturen — maandpremie is lager dan één operatie.", "Koop dierenvoeding in grote verpakkingen — significant goedkoper per kg.", "Vergelijk dierenapotheek online voor medicatie — tot 40% goedkoper dan de dierenarts."],
+  verbouwing:   ["Vraag minimaal 3 offertes voor grote werken — prijsverschillen kunnen enorm zijn.", "Plan verbouwingen buiten het hoogseizoen (herfst/winter) — aannemers zijn dan goedkoper.", "Controleer welke premies beschikbaar zijn via Flanders (Mijn VerbouwPremie, REG-premies)."],
+  donaties:     ["Giften boven €40 zijn fiscaal aftrekbaar — 45% teruggestort via belastingen.", "Stel een jaarlijks donatieplafond in als vast budgetpost.", "Domiciliëringen aan goede doelen zijn eenvoudig te pauzeren bij tijdelijke krapte."],
+  overige:      ["Categoriseer onbekende uitgaven om inzicht te krijgen — het systeem onthoudt het daarna.", "Bekijk terugkerende onbekende bedragen — dit zijn vaak kleine abonnementen die vergeten zijn."],
+};
+
+function ViewAnalyse({ allTx, maanden, maandFilter, setMaandFilter, allCategories, aantalMaanden }) {
+  const EXCL = new Set(["inkomen", "familie", "sparen", "muzad"]);
+  const maandenLijst = [...maanden].sort();
+
+  // Per maand per categorie: absolute uitgaven
+  const maandCatMap = useMemo(() => {
+    const map = {};
+    allTx.filter(t => t.bedrag < 0 && !EXCL.has(t.categorie)).forEach(t => {
+      if (!map[t.maand]) map[t.maand] = {};
+      map[t.maand][t.categorie] = (map[t.maand][t.categorie] || 0) + Math.abs(t.bedrag);
+    });
+    return map;
+  }, [allTx]);
+
+  const nMaanden = Math.max(Object.keys(maandCatMap).length, 1);
+
+  // Historisch gemiddelde per categorie
+  const avgPerCat = useMemo(() => {
+    const totals = {};
+    Object.values(maandCatMap).forEach(m => {
+      Object.entries(m).forEach(([cat, amt]) => { totals[cat] = (totals[cat] || 0) + amt; });
+    });
+    return Object.fromEntries(Object.entries(totals).map(([cat, tot]) => [cat, tot / nMaanden]));
+  }, [maandCatMap, nMaanden]);
+
+  // Referentiemaand = gekozen of meest recente
+  const refMaand = maandFilter || maandenLijst[maandenLijst.length - 1];
+  const refData  = maandCatMap[refMaand] || {};
+  const heeftRef = Object.keys(refData).length > 0;
+
+  // Vergelijking per categorie
+  const analyse = useMemo(() => Object.entries(avgPerCat)
+    .map(([cat, avg]) => {
+      const current = refData[cat] || 0;
+      const diff    = current - avg;
+      const pctDiff = avg > 5 ? (diff / avg) * 100 : 0;
+      return { cat, avg, current, diff, pctDiff };
+    })
+    .sort((a, b) => b.pctDiff - a.pctDiff),
+  [avgPerCat, refData]);
+
+  const alarmen  = analyse.filter(a => a.pctDiff > 25  && a.current > 25);
+  const positief = analyse.filter(a => a.pctDiff < -20 && a.avg > 20);
+  const totalOver  = alarmen.reduce((s, a) => s + Math.max(0, a.diff), 0);
+  const maxBar = Math.max(...analyse.map(a => Math.max(a.avg, a.current)), 1);
+
+  const sw = { padding: "7px 10px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, background: C.card, fontFamily: "inherit" };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+      {/* Header: maandkiezer + KPIs */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 20px", display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 5 }}>Analyseer maand</div>
+          <select value={maandFilter || ""} onChange={e => setMaandFilter(e.target.value || null)} style={sw}>
+            <option value="">Meest recente ({maandenLijst[maandenLijst.length - 1]})</option>
+            {[...maandenLijst].reverse().map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+        <div style={{ fontSize: 11, color: C.muted, padding: "8px 14px", background: "#f7fbfc", borderRadius: 8, border: `1px solid ${C.border}` }}>
+          Vergeleken met gemiddelde over <strong style={{ color: C.teal }}>{nMaanden} maanden</strong>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {heeftRef && totalOver > 0 && (
+            <div style={{ textAlign: "center", padding: "10px 18px", background: "#fff5f5", borderRadius: 10, border: "1px solid #fca5a5" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#C62828" }}>{fmt(totalOver)}</div>
+              <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>boven gemiddelde</div>
+            </div>
+          )}
+          {heeftRef && totalOver > 0 && (
+            <div style={{ textAlign: "center", padding: "10px 18px", background: "#f0fdf4", borderRadius: 10, border: "1px solid #86efac" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#0a7c5c" }}>{fmt(totalOver)}</div>
+              <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>extra spaarpotentieel</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Alarmen: hoog boven gemiddelde */}
+      {heeftRef && alarmen.length > 0 && (
+        <div style={{ background: C.card, border: "1px solid #fca5a5", borderRadius: 12, padding: 20 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#C62828", marginBottom: 4 }}>⚠️ Hoog verbruik in {refMaand}</div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 18 }}>
+            Deze categorieën liggen meer dan 25% boven hun historisch maandgemiddelde.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {alarmen.map(a => {
+              const cat  = allCategories[a.cat] || CATEGORIES.overige;
+              const tips = TIPS[a.cat] || TIPS.overige;
+              return (
+                <div key={a.cat} style={{ padding: 16, borderRadius: 10, background: "#fff8f8", border: "1px solid #fecaca" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+                    <span style={{ fontSize: 26, lineHeight: 1 }}>{cat.icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>{cat.label}</div>
+                      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12 }}>
+                        <span>Deze maand: <strong style={{ color: "#C62828", fontSize: 14 }}>{fmt(a.current)}</strong></span>
+                        <span style={{ color: C.muted }}>Gemiddeld: {fmt(a.avg)}</span>
+                        <span style={{ fontWeight: 700, color: "#C62828" }}>+{fmt(a.diff)} (+{Math.round(a.pctDiff)}%)</span>
+                      </div>
+                      {/* Mini progressbar */}
+                      <div style={{ marginTop: 8, background: "#fee2e2", borderRadius: 4, height: 6, overflow: "hidden" }}>
+                        <div style={{ width: `${Math.min(100, (a.avg / a.current) * 100)}%`, height: "100%", background: "#86efac", borderRadius: 4 }} />
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: C.muted, marginTop: 2 }}>
+                        <span>Gemiddeld</span><span>+{Math.round(a.pctDiff)}% te veel</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ paddingTop: 10, borderTop: "1px solid #fecaca" }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#C62828", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 6 }}>Bespaarvoorstellen</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      {tips.map((tip, i) => (
+                        <div key={i} style={{ display: "flex", gap: 8, fontSize: 12, color: C.text, lineHeight: 1.5 }}>
+                          <span style={{ color: "#C62828", fontWeight: 700, flexShrink: 0 }}>→</span>
+                          <span>{tip}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Positief nieuws */}
+      {heeftRef && positief.length > 0 && (
+        <div style={{ background: C.card, border: "1px solid #86efac", borderRadius: 12, padding: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#0a7c5c", marginBottom: 10 }}>✅ Goed bezig in {refMaand}</div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {positief.map(a => {
+              const cat = allCategories[a.cat] || CATEGORIES.overige;
+              return (
+                <div key={a.cat} style={{ padding: "10px 14px", borderRadius: 10, background: "#f0fdf4", border: "1px solid #86efac", display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 20 }}>{cat.icon}</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#0a7c5c" }}>{cat.label}</div>
+                    <div style={{ fontSize: 10, color: C.muted }}>
+                      {fmt(a.current)} vs gem. {fmt(a.avg)}
+                      <span style={{ fontWeight: 700, color: "#0a7c5c" }}> ({Math.round(Math.abs(a.pctDiff))}% lager)</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Volledige vergelijking — alle categorieën */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.teal, marginBottom: 4 }}>
+          📊 Alle categorieën — {refMaand} vs historisch gemiddelde
+        </div>
+        <div style={{ display: "flex", gap: 16, fontSize: 11, color: C.muted, marginBottom: 20, flexWrap: "wrap" }}>
+          <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#c5d5d8", borderRadius: 2, marginRight: 4 }} />Gemiddelde</span>
+          <span><span style={{ display: "inline-block", width: 10, height: 10, background: C.teal2, borderRadius: 2, marginRight: 4 }} />Huidige maand</span>
+          <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#C62828", borderRadius: 2, marginRight: 4 }} />Significant boven</span>
+          <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#0a7c5c", borderRadius: 2, marginRight: 4 }} />Onder gemiddelde</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {analyse.filter(a => a.avg > 10 || a.current > 10).map(a => {
+            const cat     = allCategories[a.cat] || CATEGORIES.overige;
+            const isOver  = a.pctDiff > 25;
+            const isMid   = a.pctDiff > 5 && a.pctDiff <= 25;
+            const isUnder = a.pctDiff < -10;
+            const barColor = isOver ? "#C62828" : isMid ? "#E65100" : isUnder ? "#0a7c5c" : C.teal2;
+            const avgW = Math.min(100, (a.avg / maxBar) * 100);
+            const curW = Math.min(100, (a.current / maxBar) * 100);
+            return (
+              <div key={a.cat}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 5 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{cat.icon} {cat.label}</span>
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: barColor }}>{fmt(a.current)}</span>
+                    <span style={{ fontSize: 10, color: C.muted }}> · gem. {fmt(a.avg)}</span>
+                    {a.avg > 5 && (
+                      <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700,
+                        color: isOver ? "#C62828" : isUnder ? "#0a7c5c" : C.muted }}>
+                        {a.pctDiff > 0 ? "+" : ""}{Math.round(a.pctDiff)}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {/* Dubbele balk: gemiddelde (licht) + huidig (gekleurd) */}
+                <div style={{ position: "relative", height: 10, background: "#e9eeef", borderRadius: 5, overflow: "hidden" }}>
+                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${avgW}%`, background: "#c5d5d8", borderRadius: 5 }} />
+                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${curW}%`, background: barColor, borderRadius: 5, opacity: 0.82 }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Structurele tips voor de grootste posten */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.teal, marginBottom: 4 }}>💡 Structurele bespaarttips</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 18 }}>Op basis van je grootste uitgavenposten over alle maanden.</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
+          {[...analyse].sort((a, b) => b.avg - a.avg)
+            .filter(a => a.avg > 40)
+            .slice(0, 8)
+            .map(a => {
+              const cat  = allCategories[a.cat] || CATEGORIES.overige;
+              const tips = TIPS[a.cat] || TIPS.overige;
+              return (
+                <div key={a.cat} style={{ padding: 16, borderRadius: 10, background: cat.bg || "#f9f9f9", border: `1px solid ${cat.color}30` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: cat.color }}>{cat.icon} {cat.label}</span>
+                    <span style={{ fontSize: 12, color: C.muted }}>{fmt(a.avg)}/mnd</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {tips.slice(0, 2).map((tip, i) => (
+                      <div key={i} style={{ display: "flex", gap: 7, fontSize: 11, color: C.text, lineHeight: 1.5 }}>
+                        <span style={{ color: cat.color, fontWeight: 700, flexShrink: 0 }}>·</span>
+                        <span>{tip}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      </div>
 
     </div>
   );
