@@ -9,20 +9,25 @@ export const DEFAULT_FAMILY_ACCOUNTS = {
 
 // ── Categorieën ───────────────────────────────────────────────────────────
 export const CATEGORIES = {
-  inkomen:    { label: "Inkomsten",          icon: "💰", color: "#0a7c5c", bg: "#e6f4f1", reducible: false },
-  wonen:      { label: "Wonen & Energie",    icon: "🏠", color: "#1565C0", bg: "#E3F2FD", reducible: false },
-  voeding:    { label: "Voeding",            icon: "🛒", color: "#2E7D32", bg: "#E8F5E9", reducible: true,  maxReduc: 25 },
-  vervoer:    { label: "Vervoer",            icon: "🚗", color: "#00838F", bg: "#E0F7FA", reducible: true,  maxReduc: 20 },
-  gezondheid: { label: "Gezondheid",         icon: "🏥", color: "#C62828", bg: "#FFEBEE", reducible: false },
-  shopping:   { label: "Shopping",           icon: "🛍️",  color: "#6A1B9A", bg: "#F3E5F5", reducible: true,  maxReduc: 60 },
-  sport:      { label: "Sport & Vrije tijd", icon: "🎾", color: "#E65100", bg: "#FBE9E7", reducible: true,  maxReduc: 35 },
-  restaurant: { label: "Restaurant & Café",  icon: "🍽️",  color: "#F57F17", bg: "#FFF8E1", reducible: true,  maxReduc: 70 },
-  telecom:    { label: "Telecom & Media",    icon: "📱", color: "#0277BD", bg: "#E1F5FE", reducible: false },
-  financieel: { label: "Financieel",         icon: "🏦", color: "#37474F", bg: "#ECEFF1", reducible: false },
-  sparen:     { label: "Sparen",             icon: "🐷", color: "#33691E", bg: "#F1F8E9", reducible: false },
-  familie:    { label: "Intern (familie)",   icon: "👨‍👩‍👧", color: "#757575", bg: "#F5F5F5", reducible: false },
-  muzad:      { label: "Muzad",              icon: "💼", color: "#C9922A", bg: "#FDF5E6", reducible: false },
-  overige:    { label: "Overige",            icon: "❓", color: "#9E9E9E", bg: "#FAFAFA", reducible: true,  maxReduc: 50 },
+  inkomen:      { label: "Inkomsten",           icon: "💰", color: "#0a7c5c", bg: "#e6f4f1", reducible: false },
+  hypotheek:    { label: "Hypotheek & Leningen",icon: "🏗️", color: "#B71C1C", bg: "#FFEBEE", reducible: false },
+  wonen:        { label: "Wonen & Energie",     icon: "🏠", color: "#1565C0", bg: "#E3F2FD", reducible: false },
+  voeding:      { label: "Voeding",             icon: "🛒", color: "#2E7D32", bg: "#E8F5E9", reducible: true,  maxReduc: 25 },
+  vervoer:      { label: "Vervoer",             icon: "🚗", color: "#00838F", bg: "#E0F7FA", reducible: true,  maxReduc: 20 },
+  gezondheid:   { label: "Gezondheid",          icon: "🏥", color: "#C62828", bg: "#FFEBEE", reducible: false },
+  shopping:     { label: "Shopping",            icon: "🛍️",  color: "#6A1B9A", bg: "#F3E5F5", reducible: true,  maxReduc: 60 },
+  sport:        { label: "Sport & Vrije tijd",  icon: "🎾", color: "#E65100", bg: "#FBE9E7", reducible: true,  maxReduc: 35 },
+  restaurant:   { label: "Restaurant & Café",   icon: "🍽️",  color: "#F57F17", bg: "#FFF8E1", reducible: true,  maxReduc: 70 },
+  telecom:      { label: "Telecom & Media",     icon: "📱", color: "#0277BD", bg: "#E1F5FE", reducible: false },
+  abonnementen: { label: "Abonnementen",        icon: "🔄", color: "#4527A0", bg: "#EDE7F6", reducible: true,  maxReduc: 40 },
+  financieel:   { label: "Financieel",          icon: "🏦", color: "#37474F", bg: "#ECEFF1", reducible: false },
+  huisdieren:   { label: "Huisdieren",          icon: "🐾", color: "#BF360C", bg: "#FBE9E7", reducible: true,  maxReduc: 30 },
+  verbouwing:   { label: "Verbouwing & Tuin",   icon: "🔨", color: "#4E342E", bg: "#EFEBE9", reducible: true,  maxReduc: 50 },
+  donaties:     { label: "Donaties",            icon: "❤️",  color: "#AD1457", bg: "#FCE4EC", reducible: true,  maxReduc: 100 },
+  sparen:       { label: "Sparen",              icon: "🐷", color: "#33691E", bg: "#F1F8E9", reducible: false },
+  familie:      { label: "Intern (familie)",    icon: "👨‍👩‍👧", color: "#757575", bg: "#F5F5F5", reducible: false },
+  muzad:        { label: "Muzad",               icon: "💼", color: "#C9922A", bg: "#FDF5E6", reducible: false },
+  overige:      { label: "Overige",             icon: "❓", color: "#9E9E9E", bg: "#FAFAFA", reducible: true,  maxReduc: 50 },
 };
 
 // ── Categorisatieregels ───────────────────────────────────────────────────
@@ -31,54 +36,102 @@ const RULES = [
   // Sparen eerst (hogere prioriteit)
   { kw: ["spaarabonnement", "spaarrekening", "spaargeld", "BE08 0344 0471 7913".toLowerCase()], cat: "sparen" },
 
+  // Hypotheek & Leningen (vóór wonen, anders mist het)
+  { kw: ["terugbetaling woonkrediet", "woonkrediet", "fortis loans", "maandaflossing",
+          "hypothecair", "hypotheeklening", "kbc hypotheek", "belfius hypotheek"], cat: "hypotheek" },
+
   // Wonen & Energie
   { kw: ["eneco", "luminus", "eandis", "fluvius", "farys", "nuon", "huur ", "hypotheek",
-          "homeserve", "syndi", "water ", "energi", "stroom", "gas "], cat: "wonen" },
+          "homeserve", "syndi", "water ", "energi", "stroom", "gas ",
+          "verisure", "securitas", "alarm", "bewaking"], cat: "wonen" },
 
-  // Voeding
+  // Voeding (incl. Ecostore = biologische winkel)
   { kw: ["colruyt", "lidl", "carrefour", "aldi", "delhaize", "spar ", "okay ", "albert heijn",
           "bakkerij", "boulangerie", "bakker ", "slagerij", "boucherie",
           "proxy riva", "vanzo supply", "night shop", "bio-planet", "bioplanet", "jumbo",
           "traiteur", "supermarkt", "supermarché", "frituur", "friterie", "appel 9090",
-          "biowinkel", "gb shop"], cat: "voeding" },
+          "biowinkel", "gb shop", "ecostore", "bij merel"], cat: "voeding" },
 
-  // Vervoer
+  // Vervoer (incl. DATS 24 = Colruyt tankstation, Indigo = parking)
   { kw: ["esso", "shell", "total ", "q8 ", "texaco", "benzine", "diesel", "tanken",
-          "parking", "mivb", "stib", "de lijn", "nmbs", "sncb", "eurostar", "thalys",
-          "taxi", "uber ", "bolt ", "velo ", "carpark", "interparking", "mobib"], cat: "vervoer" },
+          "dats 24", "dats24", "tinq", "parking", "mivb", "stib", "de lijn", "nmbs", "sncb",
+          "eurostar", "thalys", "taxi", "uber ", "bolt ", "velo ", "carpark",
+          "interparking", "mobib", "autoverzekering", "car wash", "carwash",
+          "indigo ", "indigo gent", "indigo park"], cat: "vervoer" },
 
-  // Gezondheid
+  // Gezondheid (incl. ziekenhuizen Gent, kinesisten, Kruidvat)
   { kw: ["apotheek", "pharmacie", "farmacie", "dokter", "médecin", "dentius", "tandarts",
-          "dentiste", "kinesist", "kiné", "helan", "cm ziekenfonds", "mutualit",
+          "dentiste", "kinesist", "kinesitherapie", "kiné", "helan", "cm ziekenfonds", "mutualit",
           "ziekenfonds", "riziv", "hospital", "ziekenhuis", "specialist",
-          "opticien", "optiek", "finesse", "labo ", "radiolog", "dermatol"], cat: "gezondheid" },
+          "opticien", "optiek", "finesse", "labo ", "radiolog", "dermatol",
+          "az sint-lucas", "az st.lucas", "az st lucas", "maria middelares",
+          "uz gent", "uzgent", "jan palfijn", "gzo ", "sint-vincentius",
+          "kruidvat", "de ridder", "de witte kinesit"], cat: "gezondheid" },
 
-  // Restaurant & Café
+  // Restaurant & Café (incl. lokale plaatsen Gent/Melle)
   { kw: ["restaurant", "brasserie", "bistro", "taverne", "estaminet",
-          "herman teirlinck", "belpaire", "wijnendaele", "cafe ", "café "], cat: "restaurant" },
+          "herman teirlinck", "belpaire", "wijnendaele", "cafe ", "café ",
+          "bites n more", "garrincha", "sint baafsplein", "2tl ",
+          "pi-nuts", "pi nuts", "selecta ", "fabriekske", "mardi gras",
+          "vijf voor twaalf", "patatclub", "maxicoffee", "panos "], cat: "restaurant" },
 
-  // Sport & Vrije tijd
+  // Sport & Vrije tijd (incl. Weezevent, Nationale Loterij, ski)
   { kw: ["padel", "padelclub", "ls fit", "fitness", "zwembad", "piscine", "tennis",
           "voetbal", "squash", "yoga", "pilates", "bioscoop", "cinema",
-          "theater", "concert", "ticketmaster", "eventbrite",
+          "theater", "concert", "ticketmaster", "eventbrite", "weezevent",
+          "nationaleloterij", "nationale loterij", "lotto ", "ski ",
           "hotel ", "booking.com", "airbnb", "camping", "sporthal", "tc "], cat: "sport" },
 
   // Shopping
   { kw: ["bol.com", "bolcom", "zalando", "h&m ", " hm ", "zara", "primark", "jbc ",
           "kiabi", "c&a", "fnac", "mediamarkt", "coolblue", "amazon", "ikea",
-          "brico", "action ", "zeeman", "fashion", "kledij", "marc p2p"], cat: "shopping" },
+          "brico", "action ", "zeeman", "fashion", "kledij", "marc p2p",
+          "zeb ", "bpost ", "bpost nv"], cat: "shopping" },
 
-  // Telecom
+  // Telecom & Media (incl. streamingdiensten)
   { kw: ["proximus", "orange ", "telenet", "scarlet", "voo ", "mobile viking",
-          "gsm abonnement", "internet abonnement"], cat: "telecom" },
+          "gsm abonnement", "internet abonnement", "easy guide pack",
+          "netflix", "spotify", "disney", "youtube premium", "prime video",
+          "hbo ", "videoland"], cat: "telecom" },
 
-  // Financieel
+  // Abonnementen (digitaal/kranten/beveiliging)
+  { kw: ["apple.com bill", "apple.com/bill", "mbta-", "mediafin", "mediahuis",
+          "de standaard", "de tijd", "knack", "humo ", "vlaamse radio",
+          "epidemic sound", "adobe ", "dropbox", "microsoft 365",
+          "google storage", "google one", "icloud",
+          "new scientist", "science"], cat: "abonnementen" },
+
+  // Financieel (incl. vakbond, belastingen, maaltijdcheques)
   { kw: ["verzekering", "assurance", "kbc ", "belfius", "argenta", "axa ",
           "ag insurance", "mensura", "allianz", "baloise", "fidea", "vivium",
-          "bankkosten", "beheerskost", "dossierkosten", "commissie bank"], cat: "financieel" },
+          "bankkosten", "beheerskost", "dossierkosten", "commissie bank",
+          "abvv", "aclvb", "acv ", "vakbond", "syndicaat",
+          "dkv ", "hospitalisatie",
+          "pluxee", "sodexo", "eco pass", "edenred",
+          "vlabel", "belastingen", "fod ", "gemeente ", "gemeentebelasting",
+          "ferraris gebouw", "geldopneming"], cat: "financieel" },
 
-  // Muzad
-  { kw: ["muzad"], cat: "muzad" },
+  // Huisdieren
+  { kw: ["maxi zoo", "maxizoo", "dierenarts", "vétérinaire", "animalis",
+          "pet's place", "pets place", "zooplus", "b..z ", "pets corner",
+          "dierenwinkel", "dierenkliniek"], cat: "huisdieren" },
+
+  // Verbouwing & Tuin (incl. containerpark, Eurotuin)
+  { kw: ["hubo ", "brico plan-it", "gamma ", "hornbach", "leroy merlin",
+          "tuincentrum", "garden ", "intratuin", "kwantum", "praxis ",
+          "van moorhem", "schilder", "loodgieter", "elektricien",
+          "aanneming", "aannemer", "containerpark", "eurotuin",
+          "groenwerken", "renovatie"], cat: "verbouwing" },
+
+  // Donaties & Goede doelen
+  { kw: ["greenpeace", "oxfam", "rode kruis", "artsen zonder grenzen",
+          "unicef", "wwf ", "amnesty", "dokters zonder", "damiaanactie",
+          "solidariteit", "goede doelen", "ngo ", "vzw ",
+          "de warmste week", "warmste week", "sterrenkunde",
+          "vzw_", "karus"], cat: "donaties" },
+
+  // Muzad (incl. Epidemic Sound = muzieklicenties)
+  { kw: ["muzad", "epidemic sound"], cat: "muzad" },
 ];
 
 // ── Merchant naam extraheren ──────────────────────────────────────────────
