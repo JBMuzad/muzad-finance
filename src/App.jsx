@@ -358,18 +358,16 @@ export default function App() {
             {!noData && <button onClick={resetData} style={{ padding: "5px 10px", background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.2)", borderRadius: 8, color: "#fff", fontSize: 11, cursor: "pointer" }}>✕ Reset</button>}
           </div>
         </div>
-        {!noData && (
-          <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 20px", display: "flex", gap: 2 }}>
-            {TABS.map(t => (
-              <button key={t.key} onClick={() => setView(t.key)}
-                style={{ padding: "7px 16px", border: "none", borderBottom: view === t.key ? `2px solid ${C.gold}` : "2px solid transparent",
-                  background: "transparent", color: view === t.key ? C.gold2 : "rgba(255,255,255,.65)",
-                  fontFamily: "inherit", fontSize: 13, fontWeight: view === t.key ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap" }}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-        )}
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 20px", display: "flex", gap: 2 }}>
+          {(noData ? [TABS[TABS.length - 1]] : TABS).map(t => (
+            <button key={t.key} onClick={() => setView(t.key)}
+              style={{ padding: "7px 16px", border: "none", borderBottom: view === t.key ? `2px solid ${C.gold}` : "2px solid transparent",
+                background: "transparent", color: view === t.key ? C.gold2 : "rgba(255,255,255,.65)",
+                fontFamily: "inherit", fontSize: 13, fontWeight: view === t.key ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap" }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
       </header>
 
       <main style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 20px" }}>
