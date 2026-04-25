@@ -26,23 +26,26 @@ const SANDRA_CLR = "#1A6B7C";
 const LAURA_CLR  = "#6A1B9A";
 const SOFIE_CLR  = "#E65100";
 
-function PersonCard({ name, color, initials, totaal, inkTotaal, cats, nMaanden, allCategories }) {
-  const gem   = totaal / nMaanden;
-  const saldo = inkTotaal / nMaanden - gem;
+function PersonCard({ name, color, initials, totaal, inkTotaal, cats, nMaanden, allCategories, weergave }) {
+  const gem    = totaal / nMaanden;
+  const saldo  = inkTotaal / nMaanden - gem;
+  const isGem  = weergave !== "eff";
+  const suffix = isGem ? "/mnd" : "";
+  const disp   = v => fmt(isGem ? v / nMaanden : v);
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, flex: 1, minWidth: 280 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <div style={{ width: 44, height: 44, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: "#fff", flexShrink: 0 }}>{initials}</div>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{name}</div>
-          <div style={{ fontSize: 11, color: C.muted }}>gem. {fmt(gem)}/maand uitgaven</div>
+          <div style={{ fontSize: 11, color: C.muted }}>{isGem ? `gem. ${fmt(gem)}/maand uitgaven` : `totaal ${fmt(totaal)} over ${nMaanden} mnd`}</div>
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
         {[
-          { l: "Totaal",       v: fmt(totaal),              col: color },
-          { l: "Gem. inkomen", v: fmt(inkTotaal/nMaanden),  col: "#0a7c5c" },
-          { l: "Gem. saldo",   v: fmt(saldo),               col: saldo >= 0 ? "#0a7c5c" : "#C62828" },
+          { l: isGem ? "Gem. uitgaven" : "Totaal",      v: disp(totaal),         col: color },
+          { l: isGem ? "Gem. inkomen"  : "Tot. inkomen", v: disp(inkTotaal),      col: "#0a7c5c" },
+          { l: isGem ? "Gem. saldo"    : "Tot. saldo",   v: fmt(isGem ? saldo : saldo * nMaanden), col: saldo >= 0 ? "#0a7c5c" : "#C62828" },
         ].map(k => (
           <div key={k.l} style={{ background: "#f7fbfc", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: k.col }}>{k.v}</div>
@@ -59,7 +62,7 @@ function PersonCard({ name, color, initials, totaal, inkTotaal, cats, nMaanden, 
             <div key={cat}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
                 <span style={{ fontSize: 11, color: C.text }}>{c.icon} {c.label}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color }}>{fmt(amt/nMaanden)}<span style={{ fontSize: 9, color: C.muted }}>/mnd</span></span>
+                <span style={{ fontSize: 11, fontWeight: 700, color }}>{fmt(isGem ? amt/nMaanden : amt)}{isGem && <span style={{ fontSize: 9, color: C.muted }}>/mnd</span>}</span>
               </div>
               <div style={{ background: "#e9eeef", borderRadius: 3, height: 5 }}>
                 <div style={{ width: `${w}%`, height: "100%", background: color, borderRadius: 3 }} />
@@ -72,7 +75,8 @@ function PersonCard({ name, color, initials, totaal, inkTotaal, cats, nMaanden, 
   );
 }
 
-function KindCard({ name, color, initials, ontvangenTotaal, eigenTotaal, eigenCats, maandMap, nMaanden, alleM, allCategories }) {
+function KindCard({ name, color, initials, ontvangenTotaal, eigenTotaal, eigenCats, maandMap, nMaanden, alleM, allCategories, weergave }) {
+  const isGem   = weergave !== "eff";
   const gem     = (ontvangenTotaal + eigenTotaal) / nMaanden;
   const recentM = alleM.slice(-6);
   const maxBar  = Math.max(...recentM.map(m => maandMap[m] || 0), 1);
@@ -82,19 +86,19 @@ function KindCard({ name, color, initials, ontvangenTotaal, eigenTotaal, eigenCa
         <div style={{ width: 44, height: 44, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: "#fff", flexShrink: 0 }}>{initials}</div>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{name}</div>
-          <div style={{ fontSize: 11, color: C.muted }}>gem. {fmt(gem)}/maand</div>
+          <div style={{ fontSize: 11, color: C.muted }}>{isGem ? `gem. ${fmt(gem)}/maand` : `totaal ${fmt(ontvangenTotaal + eigenTotaal)}`}</div>
         </div>
       </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         {ontvangenTotaal > 0 && (
           <div style={{ flex: 1, background: color + "18", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color }}>{fmt(ontvangenTotaal)}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color }}>{fmt(isGem ? ontvangenTotaal/nMaanden : ontvangenTotaal)}{isGem && <span style={{ fontSize: 10, fontWeight: 400, color: C.muted }}>/mnd</span>}</div>
             <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>ontvangen van Jan/Sandra</div>
           </div>
         )}
         {eigenTotaal > 0 && (
           <div style={{ flex: 1, background: "#f7fbfc", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: C.teal }}>{fmt(eigenTotaal)}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: C.teal }}>{fmt(isGem ? eigenTotaal/nMaanden : eigenTotaal)}{isGem && <span style={{ fontSize: 10, fontWeight: 400, color: C.muted }}>/mnd</span>}</div>
             <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>eigen uitgaven</div>
           </div>
         )}
@@ -141,7 +145,7 @@ function KindCard({ name, color, initials, ontvangenTotaal, eigenTotaal, eigenCa
   );
 }
 
-export default function ViewPersonen({ allTx, maanden, allCategories, filterVan, filterTot }) {
+export default function ViewPersonen({ allTx, maanden, allCategories, filterVan, filterTot, weergave }) {
   const EXCL     = new Set(["inkomen", "familie", "sparen"]);
   const alleM    = [...maanden].sort();
 
@@ -209,8 +213,8 @@ export default function ViewPersonen({ allTx, maanden, allCategories, filterVan,
       <div>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.teal, marginBottom: 14 }}>👫 Jan & Sandra — eigen verbruik</div>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <PersonCard name="Jan"    initials="J" color={JAN_CLR}    totaal={janTotaal}    inkTotaal={janInkTotaal}    cats={janCats}    nMaanden={nMaanden} allCategories={allCategories} />
-          <PersonCard name="Sandra" initials="S" color={SANDRA_CLR} totaal={sandraTotaal} inkTotaal={sandraInkTotaal} cats={sandraCats} nMaanden={nMaanden} allCategories={allCategories} />
+          <PersonCard name="Jan"    initials="J" color={JAN_CLR}    totaal={janTotaal}    inkTotaal={janInkTotaal}    cats={janCats}    nMaanden={nMaanden} allCategories={allCategories} weergave={weergave} />
+          <PersonCard name="Sandra" initials="S" color={SANDRA_CLR} totaal={sandraTotaal} inkTotaal={sandraInkTotaal} cats={sandraCats} nMaanden={nMaanden} allCategories={allCategories} weergave={weergave} />
         </div>
       </div>
 
@@ -232,10 +236,10 @@ export default function ViewPersonen({ allTx, maanden, allCategories, filterVan,
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 12 }}>
                     <span style={{ fontWeight: 600, color: C.text }}>{c.icon} {c.label}</span>
                     <span>
-                      <span style={{ color: JAN_CLR,    fontWeight: 700 }}>{fmt(jan/nMaanden)}</span>
+                      <span style={{ color: JAN_CLR,    fontWeight: 700 }}>{fmt(weergave !== "eff" ? jan/nMaanden : jan)}</span>
                       {" · "}
-                      <span style={{ color: SANDRA_CLR, fontWeight: 700 }}>{fmt(sandra/nMaanden)}</span>
-                      <span style={{ fontSize: 10, color: C.muted }}> /mnd</span>
+                      <span style={{ color: SANDRA_CLR, fontWeight: 700 }}>{fmt(weergave !== "eff" ? sandra/nMaanden : sandra)}</span>
+                      {weergave !== "eff" && <span style={{ fontSize: 10, color: C.muted }}> /mnd</span>}
                     </span>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -283,16 +287,18 @@ export default function ViewPersonen({ allTx, maanden, allCategories, filterVan,
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
           <KindCard name="Laura" initials="L" color={LAURA_CLR}
             ontvangenTotaal={lauraTotaal}          eigenTotaal={0}               eigenCats={[]}     maandMap={lauraMaand}
-            nMaanden={nMaanden} alleM={filteredM} allCategories={allCategories} />
+            nMaanden={nMaanden} alleM={filteredM} allCategories={allCategories} weergave={weergave} />
           <KindCard name="Sofie" initials="S" color={SOFIE_CLR}
             ontvangenTotaal={sofieOntvangenTotaal} eigenTotaal={sofieEigenTotaal} eigenCats={sofieCats} maandMap={sofieMaand}
-            nMaanden={nMaanden} alleM={filteredM} allCategories={allCategories} />
+            nMaanden={nMaanden} alleM={filteredM} allCategories={allCategories} weergave={weergave} />
         </div>
       </div>
 
       {/* Samenvatting */}
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: C.teal, marginBottom: 14 }}>📋 Samenvatting — gemiddeld per maand</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.teal, marginBottom: 14 }}>
+          📋 Samenvatting — {weergave !== "eff" ? "gemiddeld per maand" : "effectief totaal"}
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
           {[
             { naam: "Jan",    kleur: JAN_CLR,    totaal: janTotaal },
@@ -302,9 +308,12 @@ export default function ViewPersonen({ allTx, maanden, allCategories, filterVan,
           ].map(p => (
             <div key={p.naam} style={{ padding: "14px 16px", background: p.kleur+"12", borderRadius: 10, border: `1px solid ${p.kleur}30`, textAlign: "center" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: p.kleur, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 6 }}>{p.naam}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: p.kleur }}>{fmt(p.totaal/nMaanden)}</div>
-              <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>/maand gemiddeld</div>
-              <div style={{ fontSize: 10, color: C.muted }}>{fmt(p.totaal)} totaal</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: p.kleur }}>
+                {weergave !== "eff" ? fmt(p.totaal/nMaanden) : fmt(p.totaal)}
+              </div>
+              <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
+                {weergave !== "eff" ? "/maand gemiddeld" : `totaal · gem. ${fmt(p.totaal/nMaanden)}/mnd`}
+              </div>
             </div>
           ))}
         </div>

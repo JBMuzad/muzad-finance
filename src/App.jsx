@@ -168,7 +168,7 @@ function CatBadge({ cat, allCats }) {
 }
 
 // ── FilterBar ─────────────────────────────────────────────────────────────
-function FilterBar({ maanden, filterVan, filterTot, setFilterVan, setFilterTot }) {
+function FilterBar({ maanden, filterVan, filterTot, setFilterVan, setFilterTot, weergave, setWeergave }) {
   const isFiltered = filterVan || filterTot;
 
   function clearFilter() { setFilterVan(null); setFilterTot(null); }
@@ -223,11 +223,15 @@ function FilterBar({ maanden, filterVan, filterTot, setFilterVan, setFilterTot }
       {isFiltered && (
         <>
           <button onClick={clearFilter} style={{ ...sw, background: "#fee2e2", color: "#b91c1c", border: "none", fontWeight: 600 }}>✕ Wis</button>
-          <span style={{ marginLeft: "auto", fontSize: 11, color: C.teal, fontWeight: 600, whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 11, color: C.teal, fontWeight: 600, whiteSpace: "nowrap" }}>
             {filterVan || "begin"} → {filterTot || "nu"}
           </span>
         </>
       )}
+      <div style={{ width: 1, height: 20, background: C.border, margin: "0 4px", flexShrink: 0 }} />
+      <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, whiteSpace: "nowrap" }}>Weergave:</span>
+      <button onClick={() => setWeergave("gem")} style={{ ...sw, padding: "5px 10px", ...(weergave === "gem" ? { background: C.teal, color: "#fff", border: `1px solid ${C.teal}`, fontWeight: 600 } : { color: C.muted }) }}>∅ Gemiddeld/mnd</button>
+      <button onClick={() => setWeergave("eff")} style={{ ...sw, padding: "5px 10px", ...(weergave === "eff" ? { background: C.gold, color: "#fff", border: `1px solid ${C.gold}`, fontWeight: 600 } : { color: C.muted }) }}>Σ Effectief totaal</button>
     </div>
   );
 }
@@ -276,6 +280,7 @@ export default function App() {
   const [view,              setView]               = useState("overzicht");
   const [filterVan,         setFilterVan]          = useState(null);
   const [filterTot,         setFilterTot]          = useState(null);
+  const [weergave,          setWeergave]           = useState("gem"); // "gem" | "eff"
   const [catFilter,         setCatFilter]          = useState(null);
   const [rekeningFilter,    setRekeningFilter]     = useState(null);
   const [zoekterm,          setZoekterm]           = useState("");
@@ -523,7 +528,7 @@ export default function App() {
   function resetData() {
     if (!confirm("Alle transacties verwijderen?")) return;
     setTransactions([]); setCatOverrides({}); setFilterVan(null); setFilterTot(null);
-    setCatFilter(null); setZoekterm(""); setRekeningFilter(null);
+    setWeergave("gem"); setCatFilter(null); setZoekterm(""); setRekeningFilter(null);
   }
 
   function exportBackup() {
@@ -624,11 +629,12 @@ export default function App() {
           </div>
         )}
 
-        {/* Globale periodefilter — zichtbaar op alle tabs behalve instellingen */}
-        {!noData && view !== "instellingen" && maanden.length > 1 && (
+        {/* Globale periodefilter + weergave toggle — zichtbaar op alle tabs behalve instellingen */}
+        {!noData && view !== "instellingen" && (
           <div style={{ marginBottom: 16 }}>
             <FilterBar maanden={maanden} filterVan={filterVan} filterTot={filterTot}
-              setFilterVan={setFilterVan} setFilterTot={setFilterTot} />
+              setFilterVan={setFilterVan} setFilterTot={setFilterTot}
+              weergave={weergave} setWeergave={setWeergave} />
           </div>
         )}
 
@@ -638,7 +644,7 @@ export default function App() {
             catStats={catStats} totalUitgaven={totalUitgaven} accounts={accounts} allTx={allTx}
             filterVan={filterVan} filterTot={filterTot}
             setFilterVan={setFilterVan} setFilterTot={setFilterTot}
-            allCategories={allCategories} onUploadMore={handleFiles} />
+            weergave={weergave} allCategories={allCategories} onUploadMore={handleFiles} />
         )}
 
         {!noData && view === "transacties" && (
@@ -652,7 +658,7 @@ export default function App() {
 
         {!noData && view === "categorieen" && (
           <ViewCategorien catStats={catStats} totalUitgaven={totalUitgaven}
-            aantalMaanden={aantalMaanden}
+            aantalMaanden={aantalMaanden} weergave={weergave}
             catFilter={catFilter} setCatFilter={setCatFilter}
             setView={setView} allCategories={allCategories} filterVan={filterVan} filterTot={filterTot} />
         )}
@@ -663,14 +669,14 @@ export default function App() {
 
         {!noData && view === "personen" && (
           <ViewPersonen allTx={allTx} maanden={maanden} allCategories={allCategories}
-            filterVan={filterVan} filterTot={filterTot} />
+            filterVan={filterVan} filterTot={filterTot} weergave={weergave} />
         )}
 
         {!noData && view === "sparen" && (
           <ViewSparen gemInkomen={gemInkomen} gemUitgaven={gemUitgaven} gemSaldo={gemSaldo}
             savingsGoal={savingsGoal} setSavingsGoal={setSavingsGoal}
             simStats={simStats} reducSliders={reducSliders} setReducSliders={setReducSliders}
-            aantalMaanden={aantalMaanden} allCategories={allCategories} />
+            aantalMaanden={aantalMaanden} allCategories={allCategories} weergave={weergave} />
         )}
 
         {view === "instellingen" && (
@@ -695,12 +701,19 @@ export default function App() {
 function ViewOverzicht({ gemInkomen, gemUitgaven, gemSaldo, maandenPos, aantalMaanden,
   maandStats, catStats, totalUitgaven, accounts, allTx,
   filterVan, filterTot, setFilterVan, setFilterTot,
-  allCategories, onUploadMore }) {
+  weergave, allCategories, onUploadMore }) {
 
   const maxCat     = catStats[0]?.totaal || 1;
   const top5       = catStats.slice(0, 6);
   const recentTx   = [...allTx].sort((a, b) => b.datum.localeCompare(a.datum)).slice(0, 8);
   const saldoColor = gemSaldo >= 0 ? "#0a7c5c" : "#C62828";
+
+  // Weergave helper: gem = totaal/nMaanden, eff = totaal
+  const isGem = weergave !== "eff";
+  const dispInkomen  = isGem ? gemInkomen  : gemInkomen  * aantalMaanden;
+  const dispUitgaven = isGem ? gemUitgaven : gemUitgaven * aantalMaanden;
+  const dispSaldo    = isGem ? gemSaldo    : gemSaldo    * aantalMaanden;
+  const suffix       = isGem ? "/mnd" : "";
 
   // Klik op maand in grafiek → stel periodefilter in op die ene maand
   const selectedMaand = (filterVan && filterVan === filterTot) ? filterVan : null;
@@ -712,10 +725,10 @@ function ViewOverzicht({ gemInkomen, gemUitgaven, gemSaldo, maandenPos, aantalMa
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <KPICard label="Gem. inkomen/maand"  icon="💰" value={fmt(gemInkomen)}  color="#0a7c5c" sub={`over ${aantalMaanden} maand${aantalMaanden !== 1 ? "en" : ""}`} />
-        <KPICard label="Gem. uitgaven/maand" icon="💸" value={fmt(gemUitgaven)} color={C.teal} sub="excl. interne transfers" />
-        <KPICard label="Gem. saldo/maand"    icon="📊" value={fmt(gemSaldo)}    color={saldoColor} sub={gemSaldo < 0 ? "⚠ meer uit dan in" : "positief saldo"} />
-        <KPICard label="Maanden positief"    icon="✅" value={`${maandenPos}/${aantalMaanden}`} color="#0277BD" />
+        <KPICard label={isGem ? "Gem. inkomen/maand"  : "Totaal inkomen"}  icon="💰" value={fmt(dispInkomen)}  color="#0a7c5c" sub={isGem ? `over ${aantalMaanden} maand${aantalMaanden !== 1 ? "en" : ""}` : `${aantalMaanden} maanden`} />
+        <KPICard label={isGem ? "Gem. uitgaven/maand" : "Totaal uitgaven"} icon="💸" value={fmt(dispUitgaven)} color={C.teal}  sub="excl. interne transfers" />
+        <KPICard label={isGem ? "Gem. saldo/maand"    : "Totaal saldo"}    icon="📊" value={fmt(dispSaldo)}    color={saldoColor} sub={dispSaldo < 0 ? "⚠ meer uit dan in" : "positief saldo"} />
+        <KPICard label="Maanden positief" icon="✅" value={`${maandenPos}/${aantalMaanden}`} color="#0277BD" />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 16 }}>
@@ -750,7 +763,10 @@ function ViewOverzicht({ gemInkomen, gemUitgaven, gemSaldo, maandenPos, aantalMa
                 <div key={cs.cat}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                     <span style={{ fontSize: 12, color: C.text }}>{cat.icon} {cat.label}</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: cat.color }}>{fmt(cs.totaal / aantalMaanden)}<span style={{ fontSize: 10, fontWeight: 400, color: C.muted }}>/mnd</span></span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: cat.color }}>
+                      {fmt(isGem ? cs.totaal / aantalMaanden : cs.totaal)}
+                      {isGem && <span style={{ fontSize: 10, fontWeight: 400, color: C.muted }}>/mnd</span>}
+                    </span>
                   </div>
                   <MiniBar value={cs.totaal} max={maxCat} color={cat.color} />
                 </div>
@@ -758,8 +774,8 @@ function ViewOverzicht({ gemInkomen, gemUitgaven, gemSaldo, maandenPos, aantalMa
             })}
           </div>
           <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.muted, display: "flex", justifyContent: "space-between" }}>
-            <span>Totaal uitgaven</span>
-            <span style={{ fontWeight: 700, color: C.teal }}>{fmt(totalUitgaven / aantalMaanden)}/mnd</span>
+            <span>{isGem ? "Gem. uitgaven" : "Totaal uitgaven"}</span>
+            <span style={{ fontWeight: 700, color: C.teal }}>{fmt(isGem ? totalUitgaven / aantalMaanden : totalUitgaven)}{suffix}</span>
           </div>
         </div>
       </div>
@@ -921,12 +937,13 @@ function ViewTransacties({ filtered, accounts,
 // ══════════════════════════════════════════════════════════════════════════
 // VIEW: CATEGORIEËN
 // ══════════════════════════════════════════════════════════════════════════
-function ViewCategorien({ catStats, totalUitgaven, aantalMaanden,
+function ViewCategorien({ catStats, totalUitgaven, aantalMaanden, weergave,
   catFilter, setCatFilter, setView, allCategories, filterVan, filterTot }) {
 
   const [expanded, setExpanded] = useState(null);
   const donutSeg = catStats.slice(0, 8).map(c => ({ value: c.totaal, color: (allCategories[c.cat] || CATEGORIES.overige).color }));
   const isFiltered = filterVan || filterTot;
+  const isGem = weergave !== "eff";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -935,7 +952,7 @@ function ViewCategorien({ catStats, totalUitgaven, aantalMaanden,
           {isFiltered ? `Periode: ${filterVan || "begin"} → ${filterTot || "nu"}` : `Alle periodes · ${aantalMaanden} maanden`}
         </span>
         <span style={{ marginLeft: "auto", fontSize: 11, color: C.muted }}>
-          {isFiltered && aantalMaanden === 1 ? `Totaal: ${fmt(totalUitgaven)}` : `Gem.: ${fmt(totalUitgaven / aantalMaanden)}/mnd · Totaal: ${fmt(totalUitgaven)}`}
+          {isGem ? `Gem.: ${fmt(totalUitgaven / aantalMaanden)}/mnd · Totaal: ${fmt(totalUitgaven)}` : `Totaal: ${fmt(totalUitgaven)}`}
         </span>
       </div>
 
@@ -974,7 +991,7 @@ function ViewCategorien({ catStats, totalUitgaven, aantalMaanden,
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{cat.label}</span>
                       <span style={{ fontSize: 13, fontWeight: 700, color: cat.color }}>
-                        {(isFiltered && aantalMaanden === 1) ? fmt(cs.totaal) : <>{fmt(avgMnd)}<span style={{ fontSize: 10, fontWeight: 400, color: C.muted }}>/mnd</span></>}
+                        {isGem ? <>{fmt(avgMnd)}<span style={{ fontSize: 10, fontWeight: 400, color: C.muted }}>/mnd</span></> : fmt(cs.totaal)}
                       </span>
                     </div>
                     <MiniBar value={cs.totaal} max={catStats[0]?.totaal || 1} color={cat.color} />
