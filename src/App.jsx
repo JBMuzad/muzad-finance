@@ -26,27 +26,39 @@ function pct(part, total) { return total === 0 ? 0 : Math.round((part / total) *
 const LS_KEY     = "muzad_finance_v3";
 const LS_KEY_OLD = "muzad_finance_v2";
 
+function hasUsefulData(parsed) {
+  if (!parsed) return false;
+  return (parsed.transactions?.length > 0)
+    || Object.keys(parsed.catOverrides || {}).length > 0
+    || Object.keys(parsed.learnedRules?.merchant || {}).length > 0
+    || Object.keys(parsed.learnedRules?.iban || {}).length > 0
+    || Object.keys(parsed.customCategories || {}).length > 0;
+}
+
 function loadState() {
   try {
-    // Probeer eerst v3 (huidig)
-    const v3 = localStorage.getItem(LS_KEY);
-    if (v3) return JSON.parse(v3) || {};
+    const v3raw = localStorage.getItem(LS_KEY);
+    const v3    = v3raw ? JSON.parse(v3raw) : null;
 
-    // Migreer van v2 als die nog bestaat
     const v2raw = localStorage.getItem(LS_KEY_OLD);
-    if (v2raw) {
-      const v2 = JSON.parse(v2raw) || {};
-      // Strip details-veld uit eventuele v2-transacties
-      if (v2.transactions) {
-        v2.transactions = v2.transactions.map(({ details, ...rest }) => rest);
-      }
-      // Sla meteen op als v3 en verwijder v2
-      try { localStorage.setItem(LS_KEY, JSON.stringify(v2)); } catch {}
-      try { localStorage.removeItem(LS_KEY_OLD); } catch {}
-      return v2;
+    const v2    = v2raw ? JSON.parse(v2raw) : null;
+
+    // Gebruik v2 als v3 leeg is maar v2 nuttige data heeft
+    const source = (hasUsefulData(v3) ? v3 : null)
+                || (hasUsefulData(v2) ? v2 : null)
+                || v3
+                || {};
+
+    // Strip details-veld als die er nog in zit (v2-erfenis)
+    if (source.transactions) {
+      source.transactions = source.transactions.map(({ details, ...rest }) => rest);
     }
 
-    return {};
+    // Altijd opslaan als v3 en v2 opruimen
+    try { localStorage.setItem(LS_KEY, JSON.stringify(source)); } catch {}
+    try { if (v2raw) localStorage.removeItem(LS_KEY_OLD); } catch {}
+
+    return source;
   } catch { return {}; }
 }
 
