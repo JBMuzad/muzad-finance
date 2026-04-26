@@ -170,45 +170,52 @@ function CatBadge({ cat, allCats }) {
 // ── FilterBar ─────────────────────────────────────────────────────────────
 function FilterBar({ maanden, filterVan, filterTot, setFilterVan, setFilterTot, weergave, setWeergave }) {
   const isFiltered = filterVan || filterTot;
+  const now = new Date();
+  const curYear = now.getFullYear();
 
   function clearFilter() { setFilterVan(null); setFilterTot(null); }
 
-  function setPreset(nMnd) {
-    if (nMnd === null) { clearFilter(); return; }
+  function setYear(y) {
+    if (y === curYear) {
+      setFilterVan(`${y}-01`);
+      setFilterTot(null);
+    } else {
+      setFilterVan(`${y}-01`);
+      setFilterTot(`${y}-12`);
+    }
+  }
+
+  function setRecentMonths(n) {
     const d = new Date();
-    d.setMonth(d.getMonth() - nMnd + 1);
-    const van = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    setFilterVan(van);
+    d.setMonth(d.getMonth() - n + 1);
+    setFilterVan(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
     setFilterTot(null);
   }
 
-  function setThisYear() {
-    setFilterVan(`${new Date().getFullYear()}-01`);
-    setFilterTot(null);
+  // Detecteer actieve preset
+  function isYearActive(y) {
+    if (y === curYear) return filterVan === `${y}-01` && !filterTot;
+    return filterVan === `${y}-01` && filterTot === `${y}-12`;
   }
 
-  function setLastYear() {
-    const y = new Date().getFullYear() - 1;
-    setFilterVan(`${y}-01`);
-    setFilterTot(`${y}-12`);
-  }
+  // Jaren aanwezig in de data
+  const jaren = [...new Set(maanden.map(m => m.slice(0, 4)))].sort().reverse();
 
   const sw = { padding: "5px 8px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, background: C.card, color: C.text, fontFamily: "inherit", cursor: "pointer" };
-
-  function PresetBtn({ label, onClick }) {
-    return (
-      <button onClick={onClick} style={{ ...sw, color: C.muted, padding: "5px 10px" }}>{label}</button>
-    );
-  }
+  const btn = (label, active, onClick) => (
+    <button onClick={onClick} style={{ ...sw, padding: "5px 10px",
+      ...(active ? { background: C.teal, color: "#fff", border: `1px solid ${C.teal}`, fontWeight: 600 } : { color: C.muted }) }}>
+      {label}
+    </button>
+  );
 
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 16px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 16px", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
       <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginRight: 2, whiteSpace: "nowrap" }}>Periode:</span>
-      <button onClick={() => clearFilter()} style={{ ...sw, ...((!isFiltered) ? { background: C.teal, color: "#fff", border: `1px solid ${C.teal}`, fontWeight: 600 } : {}) }}>Alles</button>
-      <PresetBtn label="3 mnd" onClick={() => setPreset(3)} />
-      <PresetBtn label="6 mnd" onClick={() => setPreset(6)} />
-      <PresetBtn label="Dit jaar" onClick={setThisYear} />
-      <PresetBtn label="Vorig jaar" onClick={setLastYear} />
+      {btn("Alles", !isFiltered, clearFilter)}
+      {btn("3 mnd", false, () => setRecentMonths(3))}
+      {btn("6 mnd", false, () => setRecentMonths(6))}
+      {jaren.map(y => btn(y, isYearActive(parseInt(y)), () => setYear(parseInt(y))))}
       <div style={{ width: 1, height: 20, background: C.border, margin: "0 4px", flexShrink: 0 }} />
       <span style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap" }}>Van:</span>
       <select value={filterVan || ""} onChange={e => setFilterVan(e.target.value || null)} style={sw}>
@@ -230,8 +237,8 @@ function FilterBar({ maanden, filterVan, filterTot, setFilterVan, setFilterTot, 
       )}
       <div style={{ width: 1, height: 20, background: C.border, margin: "0 4px", flexShrink: 0 }} />
       <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, whiteSpace: "nowrap" }}>Weergave:</span>
-      <button onClick={() => setWeergave("gem")} style={{ ...sw, padding: "5px 10px", ...(weergave === "gem" ? { background: C.teal, color: "#fff", border: `1px solid ${C.teal}`, fontWeight: 600 } : { color: C.muted }) }}>∅ Gemiddeld/mnd</button>
-      <button onClick={() => setWeergave("eff")} style={{ ...sw, padding: "5px 10px", ...(weergave === "eff" ? { background: C.gold, color: "#fff", border: `1px solid ${C.gold}`, fontWeight: 600 } : { color: C.muted }) }}>Σ Effectief totaal</button>
+      <button onClick={() => setWeergave("gem")} style={{ ...sw, padding: "5px 10px", ...(weergave === "gem" ? { background: C.teal, color: "#fff", border: `1px solid ${C.teal}`, fontWeight: 600 } : { color: C.muted }) }}>∅ /mnd</button>
+      <button onClick={() => setWeergave("eff")} style={{ ...sw, padding: "5px 10px", ...(weergave === "eff" ? { background: C.gold, color: "#fff", border: `1px solid ${C.gold}`, fontWeight: 600 } : { color: C.muted }) }}>Σ Totaal</button>
     </div>
   );
 }
@@ -489,7 +496,11 @@ export default function App() {
     return Object.values(map).sort((a, b) => a.maand.localeCompare(b.maand));
   }, [externe]);
 
-  const aantalMaanden = Math.max(maandStats.length, 1);
+  // Gebruik alle maanden met data in de periode (niet alleen maanden met externe transacties)
+  const maandenInPeriode = useMemo(() =>
+    maanden.filter(m => inPeriode(m)),
+    [maanden, inPeriode]);
+  const aantalMaanden = Math.max(maandenInPeriode.length || maandStats.length, 1);
   const gemInkomen    = maandStats.reduce((s, m) => s + m.inkomen, 0) / aantalMaanden;
   const gemUitgaven   = maandStats.reduce((s, m) => s + m.uitgaven, 0) / aantalMaanden;
   const gemSaldo      = gemInkomen - gemUitgaven;
