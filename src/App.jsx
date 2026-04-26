@@ -519,6 +519,14 @@ export default function App() {
       const m = t.merchant || "Onbekend";
       map[t.categorie].merchants[m] = (map[t.categorie].merchants[m] || 0) + Math.abs(t.bedrag);
     });
+    // Sparen netto: trek terugnames van spaarrekeningen af.
+    // Terugnames komen terecht als positieve "sparen"-transacties op de ontvangende zichtrekening.
+    if (map["sparen"]) {
+      const teruggenomen = externe
+        .filter(t => t.bedrag > 0 && t.categorie === "sparen")
+        .reduce((s, t) => s + t.bedrag, 0);
+      map["sparen"].totaal = Math.max(0, map["sparen"].totaal - teruggenomen);
+    }
     return Object.values(map).sort((a, b) => b.totaal - a.totaal);
   }, [externe]);
 
