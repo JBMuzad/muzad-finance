@@ -571,6 +571,15 @@ export default function App() {
     reader.readAsText(file);
   }
 
+  // ── Navigeer naar transacties met filters ─────────────────────────────
+  function goToTx({ cat, rekening, van, tot } = {}) {
+    setCatFilter(cat || null);
+    setRekeningFilter(rekening || null);
+    if (van !== undefined) { setFilterVan(van); setFilterTot(tot ?? van); }
+    setZoekterm("");
+    setView("transacties");
+  }
+
   const noData = transactions.length === 0;
   const TABS = [
     { key: "overzicht",    label: "Overzicht" },
@@ -655,7 +664,8 @@ export default function App() {
             catStats={catStats} totalUitgaven={totalUitgaven} accounts={accounts} allTx={allTx}
             filterVan={filterVan} filterTot={filterTot}
             setFilterVan={setFilterVan} setFilterTot={setFilterTot}
-            weergave={weergave} allCategories={allCategories} onUploadMore={handleFiles} />
+            weergave={weergave} allCategories={allCategories} onUploadMore={handleFiles}
+            goToTx={goToTx} />
         )}
 
         {!noData && view === "transacties" && (
@@ -671,16 +681,17 @@ export default function App() {
           <ViewCategorien catStats={catStats} totalUitgaven={totalUitgaven}
             aantalMaanden={aantalMaanden} weergave={weergave}
             catFilter={catFilter} setCatFilter={setCatFilter}
-            setView={setView} allCategories={allCategories} filterVan={filterVan} filterTot={filterTot} />
+            setView={setView} allCategories={allCategories} filterVan={filterVan} filterTot={filterTot}
+            goToTx={goToTx} />
         )}
 
         {!noData && view === "analyse" && (
-          <ViewAnalyse allTx={allTx} maanden={maanden} allCategories={allCategories} />
+          <ViewAnalyse allTx={allTx} maanden={maanden} allCategories={allCategories} goToTx={goToTx} />
         )}
 
         {!noData && view === "personen" && (
           <ViewPersonen allTx={allTx} maanden={maanden} allCategories={allCategories}
-            filterVan={filterVan} filterTot={filterTot} weergave={weergave} />
+            filterVan={filterVan} filterTot={filterTot} weergave={weergave} goToTx={goToTx} />
         )}
 
         {!noData && view === "sparen" && (
@@ -712,7 +723,7 @@ export default function App() {
 function ViewOverzicht({ gemInkomen, gemUitgaven, gemSaldo, maandenPos, aantalMaanden,
   maandStats, catStats, totalUitgaven, accounts, allTx,
   filterVan, filterTot, setFilterVan, setFilterTot,
-  weergave, allCategories, onUploadMore }) {
+  weergave, allCategories, onUploadMore, goToTx }) {
 
   const maxCat     = catStats[0]?.totaal || 1;
   const top5       = catStats.slice(0, 6);
@@ -771,7 +782,7 @@ function ViewOverzicht({ gemInkomen, gemUitgaven, gemSaldo, maandenPos, aantalMa
             {top5.map(cs => {
               const cat = allCategories[cs.cat] || CATEGORIES.overige;
               return (
-                <div key={cs.cat}>
+                <div key={cs.cat} onClick={() => goToTx({ cat: cs.cat })} style={{ cursor: "pointer" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                     <span style={{ fontSize: 12, color: C.text }}>{cat.icon} {cat.label}</span>
                     <span style={{ fontSize: 12, fontWeight: 700, color: cat.color }}>
@@ -949,7 +960,7 @@ function ViewTransacties({ filtered, accounts,
 // VIEW: CATEGORIEËN
 // ══════════════════════════════════════════════════════════════════════════
 function ViewCategorien({ catStats, totalUitgaven, aantalMaanden, weergave,
-  catFilter, setCatFilter, setView, allCategories, filterVan, filterTot }) {
+  catFilter, setCatFilter, setView, allCategories, filterVan, filterTot, goToTx }) {
 
   const [expanded, setExpanded] = useState(null);
   const donutSeg = catStats.slice(0, 8).map(c => ({ value: c.totaal, color: (allCategories[c.cat] || CATEGORIES.overige).color }));
@@ -977,7 +988,7 @@ function ViewCategorien({ catStats, totalUitgaven, aantalMaanden, weergave,
               const cat = allCategories[cs.cat] || CATEGORIES.overige;
               return (
                 <div key={cs.cat} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
-                  onClick={() => { setCatFilter(cs.cat); setView("transacties"); }}>
+                  onClick={() => goToTx({ cat: cs.cat })}>
                   <div style={{ width: 10, height: 10, borderRadius: 2, background: cat.color, flexShrink: 0 }} />
                   <span style={{ fontSize: 11, color: C.text, flex: 1 }}>{cat.icon} {cat.label}</span>
                   <span style={{ fontSize: 11, fontWeight: 700, color: cat.color }}>{pct(cs.totaal, totalUitgaven)}%</span>
@@ -1027,7 +1038,7 @@ function ViewCategorien({ catStats, totalUitgaven, aantalMaanden, weergave,
                         </div>
                       ))}
                     </div>
-                    <button onClick={() => { setCatFilter(cs.cat); setView("transacties"); }}
+                    <button onClick={() => goToTx({ cat: cs.cat })}
                       style={{ marginTop: 10, padding: "5px 12px", background: cat.bg || "#f5f5f5", border: `1px solid ${cat.color}30`, borderRadius: 8, fontSize: 11, color: cat.color, cursor: "pointer", fontWeight: 600 }}>
                       Alle transacties bekijken →
                     </button>
@@ -1376,12 +1387,35 @@ const TIPS = {
   overige:      ["Categoriseer onbekende uitgaven om inzicht te krijgen — het systeem onthoudt het daarna.", "Bekijk terugkerende onbekende bedragen — dit zijn vaak kleine abonnementen die vergeten zijn."],
 };
 
-function ViewAnalyse({ allTx, maanden, allCategories }) {
-  const [refMaand, setRefMaand] = useState(null);
+// ── Vlaams gemiddeld gezin benchmark (maandbedragen in €) ────────────────
+// Bron: Statbel/VRIND 2023, Gezinsbudget gemiddeld Vlaanderen (~2 volwassenen + kinderen)
+const BENCHMARK = {
+  voeding:      650,   // boodschappen + vers
+  vervoer:      370,   // brandstof, openbaar vervoer, verzekering auto
+  wonen:        980,   // huur/hypotheek + energie + water (excl. hypotheek apart)
+  hypotheek:    900,   // typische maandaflossing Vlaamse eigenaar
+  gezondheid:   180,   // apotheek, huisarts, kinesist
+  shopping:     220,   // kleding, electronica
+  sport:        110,   // fitness, sport, vrije tijd
+  restaurant:   160,   // horeca, takeaway
+  telecom:      120,   // internet, gsm, streaming
+  abonnementen:  55,   // digitale abonnementen
+  financieel:   200,   // verzekeringen, bankkosten
+  huisdieren:    65,   // dierenarts, voeding
+  verbouwing:   130,   // gemiddeld over jaar
+  donaties:      35,   // goede doelen
+  overige:       90,
+};
+
+function ViewAnalyse({ allTx, maanden, allCategories, goToTx }) {
+  const [periodVan, setPeriodVan] = useState(null);
+  const [periodTot, setPeriodTot] = useState(null);
   const EXCL = new Set(["inkomen", "familie", "sparen", "muzad"]);
   const maandenLijst = [...maanden].sort();
+  const lastMaand = maandenLijst[maandenLijst.length - 1] || "";
+  const jaren = [...new Set(maandenLijst.map(m => m.slice(0, 4)))].sort().reverse();
 
-  // Per maand per categorie: absolute uitgaven
+  // Per maand per categorie: absolute uitgaven (excl. inkomen/intern)
   const maandCatMap = useMemo(() => {
     const map = {};
     allTx.filter(t => t.bedrag < 0 && !EXCL.has(t.categorie)).forEach(t => {
@@ -1391,211 +1425,291 @@ function ViewAnalyse({ allTx, maanden, allCategories }) {
     return map;
   }, [allTx]);
 
-  const nMaanden = Math.max(Object.keys(maandCatMap).length, 1);
+  // Gekozen periode: default = alle data
+  const activePeriodMonths = useMemo(() => {
+    const filtered = maandenLijst.filter(m =>
+      (!periodVan || m >= periodVan) && (!periodTot || m <= periodTot)
+    );
+    return filtered.length > 0 ? filtered : (lastMaand ? [lastMaand] : []);
+  }, [maandenLijst, periodVan, periodTot, lastMaand]);
 
-  // Historisch gemiddelde per categorie
-  const avgPerCat = useMemo(() => {
+  const nPeriod = Math.max(activePeriodMonths.length, 1);
+
+  // Gemiddelde uitgaven per maand per categorie voor de gekozen periode
+  const spendPerCat = useMemo(() => {
     const totals = {};
-    Object.values(maandCatMap).forEach(m => {
-      Object.entries(m).forEach(([cat, amt]) => { totals[cat] = (totals[cat] || 0) + amt; });
+    activePeriodMonths.forEach(m => {
+      Object.entries(maandCatMap[m] || {}).forEach(([cat, amt]) => {
+        totals[cat] = (totals[cat] || 0) + amt;
+      });
     });
-    return Object.fromEntries(Object.entries(totals).map(([cat, tot]) => [cat, tot / nMaanden]));
-  }, [maandCatMap, nMaanden]);
+    return Object.fromEntries(Object.entries(totals).map(([cat, tot]) => [cat, tot / nPeriod]));
+  }, [activePeriodMonths, maandCatMap, nPeriod]);
 
-  // Referentiemaand = gekozen of meest recente
-  const activeMaand = refMaand || maandenLijst[maandenLijst.length - 1];
-  const refData  = maandCatMap[activeMaand] || {};
-  const heeftRef = Object.keys(refData).length > 0;
+  // Inkomen voor de gekozen periode (gem./mnd)
+  const inkomenPerMnd = useMemo(() => {
+    const periodSet = new Set(activePeriodMonths);
+    const tot = allTx
+      .filter(t => t.categorie === "inkomen" && periodSet.has(t.maand))
+      .reduce((s, t) => s + t.bedrag, 0);
+    return tot / nPeriod;
+  }, [allTx, activePeriodMonths, nPeriod]);
 
-  // Vergelijking per categorie
-  const analyse = useMemo(() => Object.entries(avgPerCat)
-    .map(([cat, avg]) => {
-      const current = refData[cat] || 0;
-      const diff    = current - avg;
-      const pctDiff = avg > 5 ? (diff / avg) * 100 : 0;
-      return { cat, avg, current, diff, pctDiff };
-    })
-    .sort((a, b) => b.pctDiff - a.pctDiff),
-  [avgPerCat, refData]);
+  // Splits: vaste kosten (reducible: false) vs variabele kosten (reducible: true)
+  const vasteKosten = useMemo(() =>
+    Object.entries(spendPerCat)
+      .filter(([cat]) => (allCategories[cat] || CATEGORIES.overige).reducible === false)
+      .sort((a, b) => b[1] - a[1]),
+    [spendPerCat, allCategories]
+  );
+  const variabeleKosten = useMemo(() =>
+    Object.entries(spendPerCat)
+      .filter(([cat]) => (allCategories[cat] || CATEGORIES.overige).reducible !== false)
+      .sort((a, b) => b[1] - a[1]),
+    [spendPerCat, allCategories]
+  );
 
-  const alarmen  = analyse.filter(a => a.pctDiff > 25  && a.current > 25);
-  const positief = analyse.filter(a => a.pctDiff < -20 && a.avg > 20);
-  const totalOver  = alarmen.reduce((s, a) => s + Math.max(0, a.diff), 0);
-  const maxBar = Math.max(...analyse.map(a => Math.max(a.avg, a.current)), 1);
+  const totalVast     = vasteKosten.reduce((s, [, v]) => s + v, 0);
+  const totalVariabel = variabeleKosten.reduce((s, [, v]) => s + v, 0);
+  const totalUitgaven = totalVast + totalVariabel;
+  const saldoPerMnd   = inkomenPerMnd - totalUitgaven;
 
-  const sw = { padding: "7px 10px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, background: C.card, fontFamily: "inherit" };
+  // Benchmark vergelijking voor variabele categorieën
+  const benchComp = useMemo(() =>
+    variabeleKosten.map(([cat, avg]) => {
+      const bench  = BENCHMARK[cat] || 0;
+      const over   = bench > 10 ? avg - bench : 0;
+      const pctOver = bench > 10 && bench > 0 ? ((avg - bench) / bench) * 100 : 0;
+      return { cat, avg, bench, over, pctOver };
+    }).sort((a, b) => b.over - a.over),
+    [variabeleKosten]
+  );
+  const totalPotentiaal = benchComp.filter(x => x.over > 0).reduce((s, x) => s + x.over, 0);
+  const maxVar = Math.max(...variabeleKosten.map(([, v]) => v), ...benchComp.map(x => x.bench), 1);
+
+  // Periode label
+  const periodeLabel = activePeriodMonths.length === 0 ? "—"
+    : activePeriodMonths.length === 1 ? activePeriodMonths[0]
+    : `${activePeriodMonths[0]} → ${activePeriodMonths[activePeriodMonths.length - 1]}`;
+
+  // Quick-select helpers
+  function setLastN(n) {
+    const last = maandenLijst.slice(-n);
+    if (!last.length) return;
+    setPeriodVan(last[0]); setPeriodTot(last[last.length - 1]);
+  }
+  function setYear(y) { setPeriodVan(`${y}-01`); setPeriodTot(`${y}-12`); }
+  function isQuickActive(n) {
+    const last = maandenLijst.slice(-n);
+    return last.length > 0 && periodVan === last[0] && periodTot === last[last.length - 1];
+  }
+  function isYearActive(y) { return periodVan === `${y}-01` && periodTot === `${y}-12`; }
+
+  const goToTxPeriode = (cat) => goToTx({
+    cat,
+    van: activePeriodMonths[0],
+    tot: activePeriodMonths[activePeriodMonths.length - 1],
+  });
+
+  const sw  = { padding: "7px 10px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, background: C.card, fontFamily: "inherit" };
+  const btn = (active) => ({
+    padding: "5px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: "pointer",
+    border: `1px solid ${active ? C.teal : C.border}`,
+    background: active ? C.teal : C.card,
+    color: active ? "#fff" : C.muted,
+  });
+
+  const noData = activePeriodMonths.length === 0 || Object.keys(spendPerCat).length === 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-      {/* Header: maandkiezer + KPIs */}
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 20px", display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 5 }}>Analyseer maand</div>
-          <select value={refMaand || ""} onChange={e => setRefMaand(e.target.value || null)} style={sw}>
-            <option value="">Meest recente ({maandenLijst[maandenLijst.length - 1]})</option>
-            {[...maandenLijst].reverse().map(m => <option key={m} value={m}>{m}</option>)}
-          </select>
+      {/* ── Periodekiezer ─────────────────────────────────────────────── */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: ".4px", marginRight: 4 }}>Analyseer periode</span>
+          <button style={btn(!periodVan && !periodTot)} onClick={() => { setPeriodVan(null); setPeriodTot(null); }}>Alles</button>
+          <button style={btn(isQuickActive(3))}  onClick={() => setLastN(3)}>3 mnd</button>
+          <button style={btn(isQuickActive(6))}  onClick={() => setLastN(6)}>6 mnd</button>
+          <button style={btn(isQuickActive(12))} onClick={() => setLastN(12)}>12 mnd</button>
+          {jaren.map(y => <button key={y} style={btn(isYearActive(y))} onClick={() => setYear(y)}>{y}</button>)}
         </div>
-        <div style={{ fontSize: 11, color: C.muted, padding: "8px 14px", background: "#f7fbfc", borderRadius: 8, border: `1px solid ${C.border}` }}>
-          Vergeleken met gemiddelde over <strong style={{ color: C.teal }}>{nMaanden} maanden</strong>
-        </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 12, flexWrap: "wrap" }}>
-          {heeftRef && totalOver > 0 && (
-            <div style={{ textAlign: "center", padding: "10px 18px", background: "#fff5f5", borderRadius: 10, border: "1px solid #fca5a5" }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: "#C62828" }}>{fmt(totalOver)}</div>
-              <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>boven gemiddelde</div>
-            </div>
-          )}
-          {heeftRef && totalOver > 0 && (
-            <div style={{ textAlign: "center", padding: "10px 18px", background: "#f0fdf4", borderRadius: 10, border: "1px solid #86efac" }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: "#0a7c5c" }}>{fmt(totalOver)}</div>
-              <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>extra spaarpotentieel</div>
-            </div>
-          )}
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: C.muted }}>Van</span>
+            <select value={periodVan || ""} onChange={e => setPeriodVan(e.target.value || null)} style={sw}>
+              <option value="">— begin —</option>
+              {maandenLijst.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <span style={{ fontSize: 11, color: C.muted }}>Tot</span>
+            <select value={periodTot || ""} onChange={e => setPeriodTot(e.target.value || null)} style={sw}>
+              <option value="">— einde —</option>
+              {maandenLijst.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div style={{ fontSize: 12, color: C.teal, fontWeight: 600 }}>
+            {periodeLabel}{nPeriod > 1 && ` · ${nPeriod} maanden · gem./mnd`}
+          </div>
         </div>
       </div>
 
-      {/* Alarmen: hoog boven gemiddelde */}
-      {heeftRef && alarmen.length > 0 && (
-        <div style={{ background: C.card, border: "1px solid #fca5a5", borderRadius: 12, padding: 20 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#C62828", marginBottom: 4 }}>⚠️ Hoog verbruik in {activeMaand}</div>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 18 }}>
-            Deze categorieën liggen meer dan 25% boven hun historisch maandgemiddelde.
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {alarmen.map(a => {
-              const cat  = allCategories[a.cat] || CATEGORIES.overige;
-              const tips = TIPS[a.cat] || TIPS.overige;
-              return (
-                <div key={a.cat} style={{ padding: 16, borderRadius: 10, background: "#fff8f8", border: "1px solid #fecaca" }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
-                    <span style={{ fontSize: 26, lineHeight: 1 }}>{cat.icon}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>{cat.label}</div>
-                      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12 }}>
-                        <span>Deze maand: <strong style={{ color: "#C62828", fontSize: 14 }}>{fmt(a.current)}</strong></span>
-                        <span style={{ color: C.muted }}>Gemiddeld: {fmt(a.avg)}</span>
-                        <span style={{ fontWeight: 700, color: "#C62828" }}>+{fmt(a.diff)} (+{Math.round(a.pctDiff)}%)</span>
-                      </div>
-                      {/* Mini progressbar */}
-                      <div style={{ marginTop: 8, background: "#fee2e2", borderRadius: 4, height: 6, overflow: "hidden" }}>
-                        <div style={{ width: `${Math.min(100, (a.avg / a.current) * 100)}%`, height: "100%", background: "#86efac", borderRadius: 4 }} />
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: C.muted, marginTop: 2 }}>
-                        <span>Gemiddeld</span><span>+{Math.round(a.pctDiff)}% te veel</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ paddingTop: 10, borderTop: "1px solid #fecaca" }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "#C62828", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 6 }}>Bespaarvoorstellen</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                      {tips.map((tip, i) => (
-                        <div key={i} style={{ display: "flex", gap: 8, fontSize: 12, color: C.text, lineHeight: 1.5 }}>
-                          <span style={{ color: "#C62828", fontWeight: 700, flexShrink: 0 }}>→</span>
-                          <span>{tip}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+      {noData && (
+        <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: 40 }}>Geen data voor deze periode.</div>
       )}
 
-      {/* Positief nieuws */}
-      {heeftRef && positief.length > 0 && (
-        <div style={{ background: C.card, border: "1px solid #86efac", borderRadius: 12, padding: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#0a7c5c", marginBottom: 10 }}>✅ Goed bezig in {activeMaand}</div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            {positief.map(a => {
-              const cat = allCategories[a.cat] || CATEGORIES.overige;
-              return (
-                <div key={a.cat} style={{ padding: "10px 14px", borderRadius: 10, background: "#f0fdf4", border: "1px solid #86efac", display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: 20 }}>{cat.icon}</span>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#0a7c5c" }}>{cat.label}</div>
-                    <div style={{ fontSize: 10, color: C.muted }}>
-                      {fmt(a.current)} vs gem. {fmt(a.avg)}
-                      <span style={{ fontWeight: 700, color: "#0a7c5c" }}> ({Math.round(Math.abs(a.pctDiff))}% lager)</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {!noData && (<>
 
-      {/* Volledige vergelijking — alle categorieën */}
+      {/* ── Financieel overzicht ──────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+        {[
+          { label: "Inkomen/mnd",    value: inkomenPerMnd, color: "#0a7c5c", bg: "#f0fdf4", icon: "💰" },
+          { label: "Vaste kosten/mnd",    value: totalVast,    color: "#1565C0", bg: "#E3F2FD", icon: "🏗️" },
+          { label: "Variabele kosten/mnd", value: totalVariabel, color: C.teal,   bg: "#e6f4f1", icon: "🛒" },
+          { label: saldoPerMnd >= 0 ? "Overschot/mnd" : "Tekort/mnd",
+            value: saldoPerMnd, color: saldoPerMnd >= 0 ? "#0a7c5c" : "#C62828",
+            bg: saldoPerMnd >= 0 ? "#f0fdf4" : "#fff5f5", icon: saldoPerMnd >= 0 ? "✅" : "⚠️" },
+          { label: "Spaarpotentieel/mnd", value: totalPotentiaal, color: "#6d28d9", bg: "#faf5ff", icon: "🐷",
+            sub: "als je op Vlaams gem. zat" },
+        ].map(k => (
+          <div key={k.label} style={{ background: k.bg, borderRadius: 12, padding: "14px 16px", border: `1px solid ${k.color}22` }}>
+            <div style={{ fontSize: 18, marginBottom: 6 }}>{k.icon}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: k.color }}>{fmt(Math.abs(k.value))}</div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 3, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".3px" }}>{k.label}</div>
+            {k.sub && <div style={{ fontSize: 10, color: k.color, marginTop: 2 }}>{k.sub}</div>}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Variabele kosten vs Vlaams gezin ─────────────────────────── */}
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: C.teal, marginBottom: 4 }}>
-          📊 Alle categorieën — {activeMaand} vs historisch gemiddelde
+        <div style={{ fontSize: 15, fontWeight: 700, color: C.teal, marginBottom: 4 }}>
+          📊 Variabele uitgaven vs Vlaams gemiddeld gezin
         </div>
-        <div style={{ display: "flex", gap: 16, fontSize: 11, color: C.muted, marginBottom: 20, flexWrap: "wrap" }}>
-          <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#c5d5d8", borderRadius: 2, marginRight: 4 }} />Gemiddelde</span>
-          <span><span style={{ display: "inline-block", width: 10, height: 10, background: C.teal2, borderRadius: 2, marginRight: 4 }} />Huidige maand</span>
-          <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#C62828", borderRadius: 2, marginRight: 4 }} />Significant boven</span>
-          <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#0a7c5c", borderRadius: 2, marginRight: 4 }} />Onder gemiddelde</span>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+          Gem. per maand over <strong>{nPeriod} maand{nPeriod !== 1 ? "en" : ""}</strong> ({periodeLabel}).
+          Paarse balk = Vlaams gezinsgemiddelde. Klik op een rij om de transacties te zien.
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {analyse.filter(a => a.avg > 10 || a.current > 10).map(a => {
-            const cat     = allCategories[a.cat] || CATEGORIES.overige;
-            const isOver  = a.pctDiff > 25;
-            const isMid   = a.pctDiff > 5 && a.pctDiff <= 25;
-            const isUnder = a.pctDiff < -10;
-            const barColor = isOver ? "#C62828" : isMid ? "#E65100" : isUnder ? "#0a7c5c" : C.teal2;
-            const avgW = Math.min(100, (a.avg / maxBar) * 100);
-            const curW = Math.min(100, (a.current / maxBar) * 100);
+        {/* Legend */}
+        <div style={{ display: "flex", gap: 16, fontSize: 11, color: C.muted, marginBottom: 16, flexWrap: "wrap" }}>
+          <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#a78bfa", borderRadius: 2, marginRight: 4 }} />Vlaams gem.</span>
+          <span><span style={{ display: "inline-block", width: 10, height: 10, background: C.teal2, borderRadius: 2, marginRight: 4 }} />Jouw gem./mnd</span>
+          <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#C62828", borderRadius: 2, marginRight: 4 }} />Boven Vlaams gem.</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {benchComp.map(({ cat, avg, bench, over, pctOver }) => {
+            const catDef   = allCategories[cat] || CATEGORIES.overige;
+            const isAbove  = over > 10;
+            const barColor = isAbove ? "#C62828" : "#0a7c5c";
+            const barW     = Math.min(100, (avg   / maxVar) * 100);
+            const benW     = Math.min(100, (bench / maxVar) * 100);
+            const tips     = TIPS[cat] || TIPS.overige;
             return (
-              <div key={a.cat}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 5 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{cat.icon} {cat.label}</span>
-                  <div style={{ textAlign: "right" }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: barColor }}>{fmt(a.current)}</span>
-                    <span style={{ fontSize: 10, color: C.muted }}> · gem. {fmt(a.avg)}</span>
-                    {a.avg > 5 && (
-                      <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700,
-                        color: isOver ? "#C62828" : isUnder ? "#0a7c5c" : C.muted }}>
-                        {a.pctDiff > 0 ? "+" : ""}{Math.round(a.pctDiff)}%
+              <div key={cat}
+                onClick={() => goToTxPeriode(cat)}
+                style={{ padding: "10px 14px", borderRadius: 10, border: `1px solid ${isAbove ? "#fca5a5" : C.border}`,
+                  background: isAbove ? "#fff8f8" : "#f9fafb", cursor: "pointer" }}
+                onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
+                onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>{catDef.icon}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: C.text, flex: 1 }}>{catDef.label}</span>
+                  <div style={{ textAlign: "right", display: "flex", gap: 12, alignItems: "center" }}>
+                    {bench > 0 && <span style={{ fontSize: 11, color: "#7c3aed" }}>Vlaams: {fmt(bench)}</span>}
+                    <span style={{ fontSize: 14, fontWeight: 700, color: barColor }}>{fmt(avg)}</span>
+                    {isAbove && (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#C62828", background: "#fee2e2", padding: "2px 7px", borderRadius: 8 }}>
+                        +{fmt(over)} (+{Math.round(pctOver)}%)
                       </span>
+                    )}
+                    {!isAbove && bench > 0 && avg > 0 && (
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "#0a7c5c", background: "#f0fdf4", padding: "2px 7px", borderRadius: 8 }}>✓</span>
                     )}
                   </div>
                 </div>
-                {/* Dubbele balk: gemiddelde (licht) + huidig (gekleurd) */}
-                <div style={{ position: "relative", height: 10, background: "#e9eeef", borderRadius: 5, overflow: "hidden" }}>
-                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${avgW}%`, background: "#c5d5d8", borderRadius: 5 }} />
-                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${curW}%`, background: barColor, borderRadius: 5, opacity: 0.82 }} />
+                {/* Dubbele balk: Vlaams (paars) + jouw gem. (gekleurd) */}
+                <div style={{ position: "relative", height: 8, background: "#e9eeef", borderRadius: 4, overflow: "hidden" }}>
+                  {bench > 0 && <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${benW}%`, background: "#a78bfa", borderRadius: 4, opacity: 0.6 }} />}
+                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${barW}%`, background: barColor, borderRadius: 4, opacity: 0.75 }} />
                 </div>
+                {isAbove && (
+                  <div style={{ marginTop: 6, fontSize: 11, color: "#991b1b", lineHeight: 1.5 }}>
+                    <span style={{ fontWeight: 700 }}>→</span> {tips[0]}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
+        {totalPotentiaal > 0 && (
+          <div style={{ marginTop: 16, padding: "14px 16px", background: "#faf5ff", borderRadius: 10, border: "1px solid #c4b5fd", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#6d28d9" }}>🐷 Spaarpotentieel als je op Vlaams niveau zat</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Som van alle categorieën waar je boven het Vlaamse gemiddelde zit</div>
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: "#6d28d9" }}>{fmt(totalPotentiaal)}/mnd</div>
+          </div>
+        )}
       </div>
 
-      {/* Structurele tips voor de grootste posten */}
-      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: C.teal, marginBottom: 4 }}>💡 Structurele bespaarttips</div>
-        <div style={{ fontSize: 12, color: C.muted, marginBottom: 18 }}>Op basis van je grootste uitgavenposten over alle maanden.</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
-          {[...analyse].sort((a, b) => b.avg - a.avg)
-            .filter(a => a.avg > 40)
-            .slice(0, 8)
-            .map(a => {
-              const cat  = allCategories[a.cat] || CATEGORIES.overige;
-              const tips = TIPS[a.cat] || TIPS.overige;
+      {/* ── Vaste kosten (informatief, niet reduceerbaar) ─────────────── */}
+      {vasteKosten.length > 0 && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.teal, marginBottom: 4 }}>🏗️ Vaste kosten — informatief</div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.6 }}>
+            Deze kosten zijn grotendeels vast (hypotheek, energie, verzekeringen…) en moeilijk te reduceren.
+            Ze worden meegeteld in je totaalbudget maar staan buiten de benchmarkvergelijking.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
+            {vasteKosten.map(([cat, avg]) => {
+              const catDef = allCategories[cat] || CATEGORIES.overige;
               return (
-                <div key={a.cat} style={{ padding: 16, borderRadius: 10, background: cat.bg || "#f9f9f9", border: `1px solid ${cat.color}30` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: cat.color }}>{cat.icon} {cat.label}</span>
-                    <span style={{ fontSize: 12, color: C.muted }}>{fmt(a.avg)}/mnd</span>
+                <div key={cat}
+                  onClick={() => goToTxPeriode(cat)}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
+                    background: catDef.bg || "#f7fbfc", borderRadius: 10, border: `1px solid ${catDef.color}30`, cursor: "pointer" }}>
+                  <span style={{ fontSize: 20 }}>{catDef.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{catDef.label}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>gem. {fmt(avg)}/mnd</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+            <span style={{ color: C.muted }}>Totaal vaste kosten/mnd</span>
+            <span style={{ fontWeight: 700, color: C.teal }}>{fmt(totalVast)}</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bespaaradvies ────────────────────────────────────────────── */}
+      {benchComp.filter(x => x.over > 20).length > 0 && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: C.teal, marginBottom: 4 }}>💡 Concreet bespaaradvies</div>
+          <div style={{ fontSize: 12, color: C.muted, marginBottom: 18 }}>
+            Per categorie waar je significant meer uitgeeft dan het Vlaamse gemiddelde.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
+            {benchComp.filter(x => x.over > 20).map(({ cat, avg, bench, over }) => {
+              const catDef = allCategories[cat] || CATEGORIES.overige;
+              const tips   = TIPS[cat] || TIPS.overige;
+              return (
+                <div key={cat} style={{ padding: 16, borderRadius: 10, background: catDef.bg || "#f9f9f9", border: `1px solid ${catDef.color}30` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: catDef.color }}>{catDef.icon} {catDef.label}</span>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#C62828" }}>{fmt(avg)}/mnd</div>
+                      <div style={{ fontSize: 10, color: "#7c3aed" }}>Vlaams: {fmt(bench)}/mnd</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#6d28d9" }}>−{fmt(over)} bespaarbaar</div>
+                    </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {tips.slice(0, 2).map((tip, i) => (
+                    {tips.slice(0, 3).map((tip, i) => (
                       <div key={i} style={{ display: "flex", gap: 7, fontSize: 11, color: C.text, lineHeight: 1.5 }}>
-                        <span style={{ color: cat.color, fontWeight: 700, flexShrink: 0 }}>·</span>
+                        <span style={{ color: catDef.color, fontWeight: 700, flexShrink: 0 }}>·</span>
                         <span>{tip}</span>
                       </div>
                     ))}
@@ -1603,9 +1717,11 @@ function ViewAnalyse({ allTx, maanden, allCategories }) {
                 </div>
               );
             })}
+          </div>
         </div>
-      </div>
+      )}
 
+      </>)}
     </div>
   );
 }

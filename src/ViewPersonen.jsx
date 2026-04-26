@@ -26,12 +26,14 @@ const SANDRA_CLR = "#1A6B7C";
 const LAURA_CLR  = "#6A1B9A";
 const SOFIE_CLR  = "#E65100";
 
-function PersonCard({ name, color, initials, totaal, inkTotaal, cats, nMaanden, allCategories, weergave }) {
+function PersonCard({ name, color, initials, totaal, inkTotaal, cats, nMaanden, allCategories, weergave, ibans, goToTx }) {
   const gem    = totaal / nMaanden;
   const saldo  = inkTotaal / nMaanden - gem;
   const isGem  = weergave !== "eff";
   const suffix = isGem ? "/mnd" : "";
   const disp   = v => fmt(isGem ? v / nMaanden : v);
+  // Use first IBAN as rekening filter (transactions view filters by rekening)
+  const primaryIban = ibans ? [...ibans][0] : null;
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, flex: 1, minWidth: 280 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
@@ -59,7 +61,7 @@ function PersonCard({ name, color, initials, totaal, inkTotaal, cats, nMaanden, 
           const c = allCategories[cat] || CATEGORIES.overige;
           const w = Math.min(100, (amt / (cats[0]?.[1] || 1)) * 100);
           return (
-            <div key={cat}>
+            <div key={cat} onClick={() => goToTx?.({ cat, rekening: primaryIban })} style={{ cursor: goToTx ? "pointer" : "default" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
                 <span style={{ fontSize: 11, color: C.text }}>{c.icon} {c.label}</span>
                 <span style={{ fontSize: 11, fontWeight: 700, color }}>{fmt(isGem ? amt/nMaanden : amt)}{isGem && <span style={{ fontSize: 9, color: C.muted }}>/mnd</span>}</span>
@@ -145,7 +147,7 @@ function KindCard({ name, color, initials, ontvangenTotaal, eigenTotaal, eigenCa
   );
 }
 
-export default function ViewPersonen({ allTx, maanden, allCategories, filterVan, filterTot, weergave }) {
+export default function ViewPersonen({ allTx, maanden, allCategories, filterVan, filterTot, weergave, goToTx }) {
   const EXCL     = new Set(["inkomen", "familie", "sparen"]);
   const alleM    = [...maanden].sort();
 
@@ -213,8 +215,8 @@ export default function ViewPersonen({ allTx, maanden, allCategories, filterVan,
       <div>
         <div style={{ fontSize: 15, fontWeight: 700, color: C.teal, marginBottom: 14 }}>👫 Jan & Sandra — eigen verbruik</div>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <PersonCard name="Jan"    initials="J" color={JAN_CLR}    totaal={janTotaal}    inkTotaal={janInkTotaal}    cats={janCats}    nMaanden={nMaanden} allCategories={allCategories} weergave={weergave} />
-          <PersonCard name="Sandra" initials="S" color={SANDRA_CLR} totaal={sandraTotaal} inkTotaal={sandraInkTotaal} cats={sandraCats} nMaanden={nMaanden} allCategories={allCategories} weergave={weergave} />
+          <PersonCard name="Jan"    initials="J" color={JAN_CLR}    totaal={janTotaal}    inkTotaal={janInkTotaal}    cats={janCats}    nMaanden={nMaanden} allCategories={allCategories} weergave={weergave} ibans={JAN_IBANS}    goToTx={goToTx} />
+          <PersonCard name="Sandra" initials="S" color={SANDRA_CLR} totaal={sandraTotaal} inkTotaal={sandraInkTotaal} cats={sandraCats} nMaanden={nMaanden} allCategories={allCategories} weergave={weergave} ibans={SANDRA_IBANS} goToTx={goToTx} />
         </div>
       </div>
 

@@ -3,10 +3,12 @@ import { supabase } from "./supabase.js";
 // ── Transacties ───────────────────────────────────────────────────────────
 
 export async function dbLoadTransactions() {
+  // Supabase standaard limiet is 1000 rijen — expliciete hoge limiet instellen
   const { data, error } = await supabase
     .from("finance_transactions")
     .select("*")
-    .order("datum", { ascending: false });
+    .order("datum", { ascending: false })
+    .limit(50000);
   if (error) throw error;
   return data || [];
 }
