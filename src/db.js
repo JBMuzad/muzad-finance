@@ -3,14 +3,25 @@ import { supabase } from "./supabase.js";
 // ── Transacties ───────────────────────────────────────────────────────────
 
 export async function dbLoadTransactions() {
-  // Supabase standaard limiet is 1000 rijen — expliciete hoge limiet instellen
-  const { data, error } = await supabase
-    .from("finance_transactions")
-    .select("*")
-    .order("datum", { ascending: false })
-    .limit(50000);
-  if (error) throw error;
-  return data || [];
+  // Supabase heeft een server-side max-rows cap (standaard 1000).
+  // Paginatie via .range() haalt alle rijen op ongeacht die cap.
+  const PAGE = 1000;
+  const all  = [];
+  let   page = 0;
+  while (true) {
+    const from = page * PAGE;
+    const { data, error } = await supabase
+      .from("finance_transactions")
+      .select("*")
+      .order("datum", { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < PAGE) break;   // laatste pagina
+    page++;
+  }
+  return all;
 }
 
 // Upsert: voegt nieuwe toe, overschrijft bestaande NIET (categorie bewaren)
