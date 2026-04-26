@@ -7,8 +7,8 @@ export const DEFAULT_FAMILY_ACCOUNTS = {
   "BE95001677814858": { label: "Sofie",                  kleur: "#E65100", eigenaar: "Sofie" },
 };
 
-// ── Spaarrekeningen: stortingen én opnames → altijd "sparen" ──────────────
-const SAVINGS_IBANS = new Set([
+// ── Spaarrekeningen ────────────────────────────────────────────────────────
+export const SAVINGS_IBANS = new Set([
   "BE66290786264843",  // Sandra – Spaarrekening
   "BE08034404717913",  // Jan – Spaarrekening
 ]);
@@ -167,8 +167,10 @@ export function categorize(tx, familyIBANs) {
 
   // Intern familietransfer (beide kanten zijn familierekeningen)
   if (tegenInFamily && rekeningInFamily) {
-    // Als één kant een spaarrekening is → altijd sparen (storting én opname)
-    if (SAVINGS_IBANS.has(tx.tegenpartij) || SAVINGS_IBANS.has(tx.rekening)) return "sparen";
+    // Geld stroomt NAAR spaarrekening (storting van zichtrekening) → sparen
+    if (SAVINGS_IBANS.has(tx.tegenpartij)) return "sparen";
+    // Geld stroomt UIT spaarrekening (opname terug naar zichtrekening) → intern, geen spaarkost
+    if (SAVINGS_IBANS.has(tx.rekening)) return "familie";
     if (haystack.includes("spaar")) return "sparen";
     return "familie";
   }

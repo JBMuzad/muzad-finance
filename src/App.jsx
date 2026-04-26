@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { parseCSV } from "./parseCSV.js";
-import { CATEGORIES, DEFAULT_FAMILY_ACCOUNTS, processTxList, detectAccounts } from "./categorize.js";
-import { dbLoadTransactions, dbUpsertTransactions, dbUpdateCategorie, dbLoadAllSettings, dbSaveSetting } from "./db.js";
+import { CATEGORIES, DEFAULT_FAMILY_ACCOUNTS, SAVINGS_IBANS, processTxList, detectAccounts } from "./categorize.js";
+import { dbLoadTransactions, dbUpsertTransactions, dbUpdateCategorie, dbLoadAllSettings, dbSaveSetting, dbFixSparenOpnames } from "./db.js";
 import ViewPersonen from "./ViewPersonen.jsx";
 
 // ── Muzad kleurpalet ──────────────────────────────────────────────────────
@@ -298,6 +298,9 @@ export default function App() {
   useEffect(() => {
     async function init() {
       try {
+        // Fix eerst fout-gecategoriseerde spaaropnames in de DB (idempotent)
+        await dbFixSparenOpnames(SAVINGS_IBANS);
+
         const [txRows, settings] = await Promise.all([
           dbLoadTransactions(),
           dbLoadAllSettings(),

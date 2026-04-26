@@ -49,6 +49,18 @@ export async function dbUpsertTransactions(transactions) {
   if (error) throw error;
 }
 
+// Eenmalige fix: opnames van spaarrekeningen stonden foutief als "sparen",
+// terwijl het interne terugboekingen zijn (rekening = spaarrekening, bedrag < 0).
+export async function dbFixSparenOpnames(savingsIBANs) {
+  const { error } = await supabase
+    .from("finance_transactions")
+    .update({ categorie: "familie" })
+    .eq("categorie", "sparen")
+    .in("rekening", [...savingsIBANs])
+    .lt("bedrag", 0);
+  if (error) console.error("dbFixSparenOpnames mislukt:", error);
+}
+
 // Update categorie voor één of meerdere transacties
 export async function dbUpdateCategorie(ids, categorie) {
   if (!ids.length) return;
